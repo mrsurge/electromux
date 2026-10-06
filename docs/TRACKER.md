@@ -19,3 +19,6 @@
 - [ ] Add TE2 Termux consumer as a separate app; existing clients unchanged.
 
 Checked items indicate scaffold/test scope only, not complete native acceptance.
+
+Next gate: [signed-device diagnostic procedure](DEVICE_LAUNCH_PROCEDURE.md).
+Reconnecting devices and explicit build/install approval are prerequisites.
