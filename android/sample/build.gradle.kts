@@ -34,11 +34,12 @@ android {
 
 gradle.taskGraph.whenReady {
     if (keyPath == null && allTasks.any {
-        it.project == project && (it.name.startsWith("assemble") ||
-            it.name.startsWith("package") || it.name.startsWith("install"))
+        it.project == project && (it.name == "assemble" || it.name == "bundle" ||
+            it.name.matches(Regex("(assemble|package|bundle|sign|install)(Debug|Release)(AndroidTest|UniversalApk|Bundle)?")))
     }) error("Explicit Termux-compatible signing configuration is required; see README.md")
 }
 
 dependencies {
     implementation("com.cefrium:cefrium-sdk:0.9.0")
+    testImplementation("junit:junit:4.13.2")
 }

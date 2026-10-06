@@ -7,6 +7,9 @@
 - [ ] Add pinned Cefrium source submodule; prove SDK/plugin/resource combination.
 - [ ] Verify signed sample APK and installed shared UID on Motorola/Pixel.
 - [ ] Implement explicit Termux launch adapter and installer progress interface.
+- [x] Add native UID/signature/service inspection and diagnostic launch adapter.
+- [x] Compile Android sources and pass 3 launch-contract JVM tests plus 10 Python regressions.
+- [ ] Verify diagnostic command completion on a signed, installed device sample.
 - [ ] Wire Android filesystem socket client/native bridge to helper.
 - [ ] Implement local-origin asset hosting; no server fetch dependency.
 - [ ] Bound socket/backend timeouts, queues and cancellation; concurrent clients.

@@ -16,9 +16,11 @@ No TE2 imports or application-specific services belong in the host core.
 - Executable independent backend and real subprocess/socket regression tests.
 - Android/Cefrium Gradle and activity scaffold with a bundled sample page.
 
-The Android scaffold does **not** yet launch Termux or connect its bridge to
-the helper. Signing/shared UID, device service launch, local asset serving,
-renderer lifecycle and the complete round trip remain acceptance gates.
+The Android sample has native identity inspection and an explicit diagnostic
+Termux launch adapter (`python --version`). It does **not** yet connect the
+page bridge to the helper or observe diagnostic completion. Signing/shared UID,
+device service launch, local asset serving, renderer lifecycle and the complete
+round trip remain acceptance gates. See [intent security notes](docs/INTENT_SECURITY.md).
 
 ## Run the host-independent tests
 
