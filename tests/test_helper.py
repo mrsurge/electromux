@@ -9,6 +9,8 @@ import time
 import unittest
 
 from electromux.protocol import read_frame, write_frame
+from electromux.protocol import ProtocolError
+from electromux.helper import DeadlinePipe
 
 
 class HelperTests(unittest.TestCase):
@@ -90,6 +92,25 @@ class HelperTests(unittest.TestCase):
 
     def test_socket_permissions(self) -> None:
         self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
+
+    def test_authenticated_shutdown_reaps_helper_and_backend(self) -> None:
+        client, stream, _ = self.connect()
+        with client, stream:
+            pid = self.call(stream, "start")["result"]["pid"]
+            self.assertEqual(self.call(stream, "shutdown")["result"]["state"], "stopped")
+        self.assertEqual(self.process.wait(timeout=5), 0)
+        self.assertFalse(self.path.exists())
+        with self.assertRaises(ProcessLookupError):
+            os.kill(pid, 0)
+
+    def test_pipe_deadline_does_not_wait_forever(self) -> None:
+        reader, writer = os.pipe()
+        try:
+            with self.assertRaises(ProtocolError):
+                DeadlinePipe(reader, 0.02).read(1)
+        finally:
+            os.close(reader)
+            os.close(writer)
 
     def test_helper_exit_reaps_owned_child(self) -> None:
         client, stream, _ = self.connect()

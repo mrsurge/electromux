@@ -4,6 +4,7 @@
     <queries><package android:name="com.termux" /></queries>
     <application android:name=".SampleApplication" android:label="Electromux Sample"
         android:allowBackup="false" android:theme="@android:style/Theme.Material.NoActionBar">
+        <receiver android:name=".DiagnosticResultReceiver" android:exported="false" />
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

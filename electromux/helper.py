@@ -5,11 +5,39 @@ import hmac
 import os
 from pathlib import Path
 import signal
+import selectors
 import socket
 import subprocess
 import sys
+import time
 
 from .protocol import ProtocolError, read_frame, write_frame
+
+
+class DeadlinePipe:
+    """Bounded blocking pipe operations; one deadline covers a complete frame."""
+    def __init__(self, fd: int, timeout: float = 5.0) -> None:
+        self.fd = fd
+        self.deadline = time.monotonic() + timeout
+
+    def _wait(self, event: int) -> None:
+        with selectors.DefaultSelector() as selector:
+            selector.register(self.fd, event)
+            if not selector.select(max(0, self.deadline - time.monotonic())):
+                raise ProtocolError("backend I/O deadline exceeded")
+
+    def read(self, size: int) -> bytes:
+        self._wait(selectors.EVENT_READ)
+        return os.read(self.fd, size)
+
+    def write(self, data: bytes) -> None:
+        offset = 0
+        while offset < len(data):
+            self._wait(selectors.EVENT_WRITE)
+            offset += os.write(self.fd, data[offset:offset + 4096])
+
+    def flush(self) -> None:
+        pass
 
 
 class Session:
@@ -29,9 +57,12 @@ class Session:
         self.child = subprocess.Popen(self.argv, stdin=subprocess.PIPE,
                                       stdout=subprocess.PIPE, start_new_session=True)
         assert self.child.stdout is not None
-        if read_frame(self.child.stdout) != {"version": 1, "event": "ready"}:
+        try:
+            if read_frame(DeadlinePipe(self.child.stdout.fileno())) != {"version": 1, "event": "ready"}:
+                raise ProtocolError("backend did not report ready")
+        except (ProtocolError, OSError):
             self.stop()
-            raise ProtocolError("backend did not report ready")
+            raise
         return self.status()
 
     def request(self, payload: object) -> dict[str, object]:
@@ -40,10 +71,14 @@ class Session:
         if self.status()["state"] != "ready" or self.child is None:
             raise ProtocolError("backend is stopped")
         assert self.child.stdin is not None and self.child.stdout is not None
-        write_frame(self.child.stdin, payload)
-        response = read_frame(self.child.stdout)
-        if response is None or response.get("id") != payload.get("id"):
-            raise ProtocolError("backend correlation failure")
+        try:
+            write_frame(DeadlinePipe(self.child.stdin.fileno()), payload)
+            response = read_frame(DeadlinePipe(self.child.stdout.fileno()))
+            if response is None or response.get("id") != payload.get("id"):
+                raise ProtocolError("backend correlation failure")
+        except (ProtocolError, OSError):
+            self.stop()
+            raise
         return response
 
     def stop(self) -> dict[str, object]:
@@ -81,6 +116,7 @@ def serve(path: Path, session_id: str, token: str) -> None:
         listener.listen(1)
         while True:
             connection, _ = listener.accept()
+            connection.settimeout(30)
             with connection, connection.makefile("rwb", buffering=0) as stream:
                 try:
                     hello = read_frame(stream)
@@ -112,12 +148,15 @@ def serve(path: Path, session_id: str, token: str) -> None:
                             elif method == "detach":
                                 write_frame(stream, {"id": identifier, "result": {"detached": True}})
                                 break
+                            elif method == "shutdown":
+                                write_frame(stream, {"id": identifier, "result": session.stop()})
+                                return
                             else:
                                 raise ProtocolError("unknown method")
                             write_frame(stream, {"id": identifier, "result": result})
                         except (ProtocolError, BrokenPipeError) as exc:
                             write_frame(stream, {"id": identifier, "error": str(exc)})
-                except (ProtocolError, ConnectionError):
+                except (ProtocolError, OSError):
                     pass
     except KeyboardInterrupt:
         pass

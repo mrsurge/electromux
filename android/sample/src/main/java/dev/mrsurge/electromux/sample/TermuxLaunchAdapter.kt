@@ -40,6 +40,18 @@ class TermuxLaunchAdapter(private val context: Context) {
     /** Must be called from an explicit visible native user action, not page input. */
     fun launch(spec: LaunchSpec) {
         check(inspect().canLaunch) { "Termux identity/service verification failed" }
+        val completion = DiagnosticCompletion.prepare(context)
+        try {
+            context.startForegroundService(executionIntent(spec).putExtra("pendingIntent", completion))
+        } catch (error: RuntimeException) {
+            DiagnosticCompletion.dispatchFailed()
+            throw error
+        }
+    }
+
+    /** Helper launch has no short diagnostic timeout: its socket hello is readiness. */
+    fun launchHelper(spec: LaunchSpec) {
+        check(inspect().canLaunch) { "Termux identity/service verification failed" }
         context.startForegroundService(executionIntent(spec))
     }
 }

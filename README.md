@@ -17,10 +17,14 @@ No TE2 imports or application-specific services belong in the host core.
 - Android/Cefrium Gradle and activity scaffold with a bundled sample page.
 
 The Android sample has native identity inspection and an explicit diagnostic
-Termux launch adapter (`python --version`). It does **not** yet connect the
-page bridge to the helper or observe diagnostic completion. Signing/shared UID,
-device service launch, local asset serving, renderer lifecycle and the complete
-round trip remain acceptance gates. See [intent security notes](docs/INTENT_SECURITY.md).
+Termux launch adapter (`python --version`) and a restricted bundled-page helper
+bridge. Native code provisions the bundled Python helper into a sample-owned
+Termux cache directory, retains credentials and performs bounded authenticated
+filesystem-socket requests. A correlated native completion observer displays
+bounded stdout/stderr, exit status and Termux errors, with a 30-second timeout
+and no automatic retry. Signing/shared UID,
+renderer lifecycle and the complete round trip have separately recorded
+acceptance gates. See [intent security notes](docs/INTENT_SECURITY.md) and the tracker.
 
 ## Run the host-independent tests
 

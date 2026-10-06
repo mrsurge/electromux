@@ -4,6 +4,10 @@ plugins {
 }
 
 val keyPath = providers.environmentVariable("ELECTROMUX_KEYSTORE").orNull
+val helperAssets = tasks.register<Sync>("bundleSampleHelper") {
+    from("../../electromux") { include("*.py"); into("helper/electromux") }
+    into(layout.buildDirectory.dir("generated/helperAssets"))
+}
 android {
     namespace = "dev.mrsurge.electromux.sample"
     compileSdk = 37
@@ -30,13 +34,20 @@ android {
         }
     }
     packaging { jniLibs { useLegacyPackaging = true } }
+    sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/helperAssets").get().asFile)
 }
+tasks.named("preBuild") { dependsOn(helperAssets) }
 
 gradle.taskGraph.whenReady {
     if (keyPath == null && allTasks.any {
         it.project == project && (it.name == "assemble" || it.name == "bundle" ||
             it.name.matches(Regex("(assemble|package|bundle|sign|install)(Debug|Release)(AndroidTest|UniversalApk|Bundle)?")))
     }) error("Explicit Termux-compatible signing configuration is required; see README.md")
+}
+
+// Cefrium embeds ListenableFuture; omit the redundant transitive Guava JAR.
+configurations.configureEach {
+    exclude(group = "com.google.guava", module = "listenablefuture")
 }
 
 dependencies {

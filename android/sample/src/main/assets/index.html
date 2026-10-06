@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; frame-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Electromux Sample</title>
   <style>body{font:16px sans-serif;background:#18202b;color:#eee;padding:24px}button{padding:12px}</style>
@@ -9,7 +10,19 @@
 <body>
   <h1>Electromux Sample</h1>
   <p>Bundled frontend scaffold. No TE2 dependency.</p>
-  <p role="status">Termux launch and native helper bridge are not wired yet.</p>
-  <button disabled>Start backend (pending device contract)</button>
+  <p role="status" id="status">Connect the authenticated helper to begin.</p>
+  <div>
+    <button data-method="connect">Connect helper</button>
+    <button data-method="start">Start backend</button>
+    <button data-method="ping">Ping backend</button>
+    <button data-method="status">Status</button>
+    <button data-method="detach">Detach</button>
+    <button data-method="stop">Stop backend</button>
+    <button data-method="shutdown">Shutdown helper</button>
+  </div>
+  <pre id="result" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+  <p id="event" aria-live="polite"></p>
+  <script src="electromux-bridge.js"></script>
+  <script src="sample.js"></script>
 </body>
 </html>

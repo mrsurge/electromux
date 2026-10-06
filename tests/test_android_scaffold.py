@@ -15,8 +15,16 @@ class AndroidScaffoldTests(unittest.TestCase):
         self.assertIn('applicationId = "dev.mrsurge.electromux.sample"', build)
         self.assertIn("Explicit Termux-compatible signing configuration is required", build)
 
-    def test_sample_does_not_claim_live_bridge(self) -> None:
+    def test_sample_uses_bundled_restricted_bridge(self) -> None:
         html = (ROOT / "android/sample/src/main/assets/index.html").read_text()
-        self.assertIn("not wired yet", html)
-        self.assertIn("button disabled", html)
+        self.assertIn('src="sample.js"', html)
+        self.assertIn("frame-src 'none'", html)
+        self.assertIn('data-method="connect"', html)
         self.assertNotIn("srcdoc", html)
+
+    def test_cefrium_bridge_registers_native_callback_target(self) -> None:
+        activity = (ROOT / "android/sample/src/main/java/dev/mrsurge/electromux/sample/MainActivity.kt").read_text()
+        self.assertIn("browser.setQueryHandler", activity)
+        self.assertIn("browser.setOnLoadingStateChangedListener", activity)
+        self.assertLess(activity.index("browser.setOnLoadingStateChangedListener"),
+                        activity.index("browser.loadUrl"))
