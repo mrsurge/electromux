@@ -1,0 +1,7 @@
+{
+  "repository": "https://codeberg.org/cefrium/cef-android.git",
+  "referenceCommit": "0ccfc227e32acd4e78aa735c696983e65013d13b",
+  "sdkVersion": "0.9.0",
+  "gradlePluginVersion": "0.9.0",
+  "status": "reference pin; source submodule not yet added"
+}
