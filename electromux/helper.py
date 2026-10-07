@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import hmac
+import json
 import os
 from pathlib import Path
 import signal
@@ -10,6 +11,9 @@ import socket
 import subprocess
 import sys
 import time
+import threading
+import queue
+from collections.abc import Callable
 
 from .protocol import ProtocolError, read_frame, write_frame
 
@@ -41,9 +45,59 @@ class DeadlinePipe:
 
 
 class Session:
-    def __init__(self, argv: list[str]) -> None:
+    def __init__(self, argv: list[str], *, cwd: str | None = None,
+                 env: dict[str, str] | None = None, stop_timeout: float = 2.0) -> None:
         self.argv = argv
+        self.cwd = cwd
+        self.env = env
+        self.stop_timeout = stop_timeout
         self.child: subprocess.Popen[bytes] | None = None
+        self.events: Callable[[dict[str, object]], None] | None = None
+        self._condition = threading.Condition()
+        self._request_lock = threading.Lock()
+        self._reader: threading.Thread | None = None
+        self._expected: int | None = None
+        self._response: dict[str, object] | None = None
+        self._error: str | None = None
+
+    def _read_output(self, child: subprocess.Popen[bytes]) -> None:
+        assert child.stdout is not None
+        try:
+            while True:
+                # Idle is unbounded; once a frame starts, completion is bounded.
+                first = os.read(child.stdout.fileno(), 1)
+                if not first:
+                    raise ProtocolError("backend output closed")
+                pipe = DeadlinePipe(child.stdout.fileno())
+                class StartedFrame:
+                    def read(self, size: int) -> bytes:
+                        nonlocal first
+                        if first:
+                            value, first = first, b""
+                            return value
+                        return pipe.read(size)
+                frame = read_frame(StartedFrame())
+                assert frame is not None
+                if "event" in frame:
+                    event = frame.get("event")
+                    if ("id" in frame or not isinstance(event, str)
+                            or not event or len(event) > 128):
+                        raise ProtocolError("invalid backend event")
+                    observer = self.events
+                    if observer is not None:
+                        observer(frame)
+                else:
+                    with self._condition:
+                        if (type(frame.get("id")) is not int
+                                or frame.get("id") != self._expected
+                                or self._response is not None):
+                            raise ProtocolError("backend correlation failure")
+                        self._response = frame
+                        self._condition.notify_all()
+        except (ProtocolError, OSError) as exc:
+            with self._condition:
+                self._error = str(exc)
+                self._condition.notify_all()
 
     def status(self) -> dict[str, object]:
         live = self.child is not None and self.child.poll() is None
@@ -55,7 +109,8 @@ class Session:
             return self.status()
         self.stop()
         self.child = subprocess.Popen(self.argv, stdin=subprocess.PIPE,
-                                      stdout=subprocess.PIPE, start_new_session=True)
+                                      stdout=subprocess.PIPE, start_new_session=True,
+                                      cwd=self.cwd, env=self.env, bufsize=0)
         assert self.child.stdout is not None
         try:
             if read_frame(DeadlinePipe(self.child.stdout.fileno())) != {"version": 1, "event": "ready"}:
@@ -63,23 +118,38 @@ class Session:
         except (ProtocolError, OSError):
             self.stop()
             raise
+        self._error = None
+        self._reader = threading.Thread(target=self._read_output, args=(self.child,), daemon=True)
+        self._reader.start()
         return self.status()
 
     def request(self, payload: object) -> dict[str, object]:
-        if not isinstance(payload, dict):
-            raise ProtocolError("payload must be an object")
+        if not isinstance(payload, dict) or type(payload.get("id")) is not int:
+            raise ProtocolError("payload requires an integer id")
         if self.status()["state"] != "ready" or self.child is None:
             raise ProtocolError("backend is stopped")
         assert self.child.stdin is not None and self.child.stdout is not None
-        try:
-            write_frame(DeadlinePipe(self.child.stdin.fileno()), payload)
-            response = read_frame(DeadlinePipe(self.child.stdout.fileno()))
-            if response is None or response.get("id") != payload.get("id"):
-                raise ProtocolError("backend correlation failure")
-        except (ProtocolError, OSError):
-            self.stop()
-            raise
-        return response
+        with self._request_lock:
+            try:
+                with self._condition:
+                    self._expected = payload["id"]
+                    self._response = None
+                write_frame(DeadlinePipe(self.child.stdin.fileno()), payload)
+                with self._condition:
+                    if not self._condition.wait_for(
+                        lambda: self._response is not None or self._error is not None, timeout=5,
+                    ):
+                        raise ProtocolError("backend response deadline exceeded")
+                    if self._response is None and self._error is not None:
+                        raise ProtocolError(self._error)
+                    assert self._response is not None
+                    response = self._response
+                    self._expected = None
+                    self._response = None
+                return response
+            except (ProtocolError, OSError):
+                self.stop()
+                raise
 
     def stop(self) -> dict[str, object]:
         child, self.child = self.child, None
@@ -87,10 +157,13 @@ class Session:
             if child.poll() is None:
                 os.killpg(child.pid, signal.SIGTERM)
                 try:
-                    child.wait(timeout=2)
+                    child.wait(timeout=self.stop_timeout)
                 except subprocess.TimeoutExpired:
                     os.killpg(child.pid, signal.SIGKILL)
                     child.wait(timeout=2)
+            if self._reader:
+                self._reader.join(timeout=6)
+                self._reader = None
             if child.stdin:
                 child.stdin.close()
             if child.stdout:
@@ -98,12 +171,90 @@ class Session:
         return self.status()
 
 
-def serve(path: Path, session_id: str, token: str) -> None:
+class ConnectionWriter:
+    """One bounded writer for replies/events; a slow client is disconnected."""
+    def __init__(self, connection: socket.socket, stream: object) -> None:
+        self.connection = connection
+        self.stream = stream
+        self.frames: queue.Queue[dict[str, object] | None] = queue.Queue(maxsize=16)
+        self.closed = threading.Event()
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread.start()
+
+    def _disconnect(self) -> None:
+        self.closed.set()
+        try:
+            self.connection.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+
+    def send(self, frame: dict[str, object]) -> None:
+        if self.closed.is_set():
+            raise ProtocolError("client writer closed")
+        try:
+            self.frames.put_nowait(frame)
+        except queue.Full:
+            self._disconnect()
+            raise ProtocolError("client output queue exceeded")
+
+    def event(self, frame: dict[str, object]) -> None:
+        try:
+            self.send(frame)
+        except ProtocolError:
+            pass  # Disconnect the slow client, not the owned backend.
+
+    def _run(self) -> None:
+        try:
+            while (frame := self.frames.get()) is not None:
+                write_frame(self.stream, frame)
+        except (ProtocolError, OSError):
+            self._disconnect()
+
+    def close(self) -> None:
+        try:
+            self.frames.put_nowait(None)
+        except queue.Full:
+            self._disconnect()
+        self.thread.join(timeout=1)
+        if self.thread.is_alive():
+            self._disconnect()
+            self.thread.join(timeout=1)
+        self.closed.set()
+
+
+def declared_backend(path: Path) -> Session:
+    """Host-owned private declaration, never a command accepted from a page."""
+    if path.is_symlink() or not path.is_file() or path.stat().st_mode & 0o077:
+        raise ValueError("backend declaration must be a private regular file")
+    if path.stat().st_size > 65536:
+        raise ValueError("backend declaration exceeds limit")
+    value = json.loads(path.read_text())
+    if not isinstance(value, dict) or set(value) - {"argv", "cwd", "env", "stopTimeout"}:
+        raise ValueError("invalid backend declaration")
+    argv, cwd, overrides = value.get("argv"), value.get("cwd"), value.get("env", {})
+    if (not isinstance(argv, list) or not 1 <= len(argv) <= 128
+            or any(not isinstance(item, str) or "\0" in item or len(item) > 16384 for item in argv)
+            or not Path(argv[0]).is_absolute()):
+        raise ValueError("backend argv requires an absolute executable")
+    if not isinstance(cwd, str) or not Path(cwd).is_absolute() or not Path(cwd).is_dir():
+        raise ValueError("backend cwd requires an existing absolute directory")
+    if (not isinstance(overrides, dict) or len(overrides) > 64
+            or any(not isinstance(k, str) or not k or "=" in k or "\0" in k
+                   or not isinstance(v, str) or "\0" in v or len(v) > 16384
+                   for k, v in overrides.items())):
+        raise ValueError("invalid backend environment")
+    timeout = value.get("stopTimeout", 2)
+    if type(timeout) not in (int, float) or not 0 < timeout <= 30:
+        raise ValueError("invalid backend stop deadline")
+    return Session(argv, cwd=cwd, env={**os.environ, **overrides}, stop_timeout=timeout)
+
+
+def serve(path: Path, session_id: str, token: str, backend: Path | None = None) -> None:
     if path.exists() or path.is_symlink():
         raise RuntimeError("endpoint already exists; refusing replacement")
     if not path.parent.is_dir() or path.parent.stat().st_mode & 0o077:
         raise RuntimeError("endpoint requires an existing private 0700 directory")
-    session = Session([sys.executable, "-m", "electromux.sample_backend"])
+    session = declared_backend(backend) if backend else Session([sys.executable, "-m", "electromux.sample_backend"])
     listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     bound = False
     def interrupted(_signum: int, _frame: object) -> None:
@@ -118,6 +269,7 @@ def serve(path: Path, session_id: str, token: str) -> None:
             connection, _ = listener.accept()
             connection.settimeout(30)
             with connection, connection.makefile("rwb", buffering=0) as stream:
+                writer = None
                 try:
                     hello = read_frame(stream)
                     if hello is None:
@@ -131,6 +283,9 @@ def serve(path: Path, session_id: str, token: str) -> None:
                         write_frame(stream, {"id": hello.get("id"), "error": "invalid handshake"})
                         continue
                     write_frame(stream, {"id": hello.get("id"), "result": {"version": 1}})
+                    writer = ConnectionWriter(connection, stream)
+                    if hello.get("events") is True:
+                        session.events = writer.event
                     while (request := read_frame(stream)) is not None:
                         identifier = request.get("id")
                         if type(identifier) is not int:
@@ -146,18 +301,22 @@ def serve(path: Path, session_id: str, token: str) -> None:
                             elif method == "request":
                                 result = session.request(request.get("payload"))
                             elif method == "detach":
-                                write_frame(stream, {"id": identifier, "result": {"detached": True}})
+                                writer.send({"id": identifier, "result": {"detached": True}})
                                 break
                             elif method == "shutdown":
-                                write_frame(stream, {"id": identifier, "result": session.stop()})
+                                writer.send({"id": identifier, "result": session.stop()})
                                 return
                             else:
                                 raise ProtocolError("unknown method")
-                            write_frame(stream, {"id": identifier, "result": result})
+                            writer.send({"id": identifier, "result": result})
                         except (ProtocolError, BrokenPipeError) as exc:
-                            write_frame(stream, {"id": identifier, "error": str(exc)})
+                            writer.send({"id": identifier, "error": str(exc)})
                 except (ProtocolError, OSError):
                     pass
+                finally:
+                    session.events = None
+                    if writer is not None:
+                        writer.close()
     except KeyboardInterrupt:
         pass
     finally:
@@ -172,6 +331,7 @@ def main() -> None:
     parser.add_argument("--socket", type=Path, required=True)
     parser.add_argument("--session", required=True)
     parser.add_argument("--token-file", type=Path, required=True)
+    parser.add_argument("--backend-config", type=Path)
     args = parser.parse_args()
     info = args.token_file.stat()
     if info.st_mode & 0o077:
@@ -179,7 +339,7 @@ def main() -> None:
     token = args.token_file.read_text().strip()
     if len(token) < 32:
         parser.error("token must contain at least 32 characters")
-    serve(args.socket, args.session, token)
+    serve(args.socket, args.session, token, args.backend_config)
 
 
 if __name__ == "__main__":

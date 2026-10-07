@@ -11,6 +11,14 @@ class Fragmented(io.BytesIO):
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_partial_writes_complete_frame(self) -> None:
+        class PartialWriter(io.BytesIO):
+            def write(self, value: bytes) -> int:
+                return super().write(value[:3])
+        stream = PartialWriter()
+        write_frame(stream, {"id": 8, "event": "sample"})
+        self.assertEqual(read_frame(io.BytesIO(stream.getvalue())), {"id": 8, "event": "sample"})
+
     def test_roundtrip_fragmented(self) -> None:
         stream = io.BytesIO()
         write_frame(stream, {"id": 1, "value": "hello 🌍"})

@@ -41,5 +41,13 @@ def write_frame(stream: BinaryIO, value: dict[str, object]) -> None:
     raw = json.dumps(value, separators=(",", ":"), allow_nan=False).encode()
     if not 0 < len(raw) <= MAX_FRAME:
         raise ProtocolError("invalid frame length")
-    stream.write(struct.pack(">I", len(raw)) + raw)
+    framed = struct.pack(">I", len(raw)) + raw
+    offset = 0
+    while offset < len(framed):
+        count = stream.write(framed[offset:])
+        if count is None:  # DeadlinePipe writes the complete supplied buffer.
+            break
+        if count <= 0:
+            raise ProtocolError("frame write made no progress")
+        offset += count
     stream.flush()

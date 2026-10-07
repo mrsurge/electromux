@@ -33,7 +33,19 @@ backend process, never automatic mutation retries. The sample backend supports
 only ping and emits a correlated event with the response, not an unsolicited
 event stream. Backend frame I/O has five-second deadlines; idle client reads
 expire after 30 seconds without stopping the retained backend. Long-running
-application streaming/backpressure and concurrent clients remain separate work.
+application streaming and concurrent clients remain separate work.
+
+The helper now optionally relays unsolicited backend events: an authenticated
+hello opts in with `events: true`. Events have a nonempty name (at most 128
+characters), no request ID, and the same 64 KiB frame limit. One backend output
+reader demultiplexes events and integer-correlated replies. Idle backend output
+is allowed; partial frames and reply waits retain five-second deadlines.
+One writer per connection serializes frames with a bounded 16-frame queue;
+overflow disconnects the slow client without stopping the backend. No detached
+event history is retained or replayed. A reconnect reads current application
+state explicitly. Existing request-only clients need not opt in and receive no
+unsolicited frames. Android's existing sample client remains request-only until
+its socket reader and renderer lifecycle/event authorization are upgraded.
 
 The Android page bridge accepts only the exact bundled index URL and fixed
 connect/start/ping/status/detach/stop/shutdown operations. Native code owns all

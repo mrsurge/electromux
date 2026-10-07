@@ -11,6 +11,9 @@ the first bridge slice was separately approved with targeted local validation.
 - [x] Add disposable browser subscriptions for bounded reply-associated events.
 - [ ] Complete build-time branding, stable-origin/custom serving and backend adapter configuration.
 - [ ] Prove unsolicited native event delivery and renderer lifecycle fencing.
+  Helper transport foundation is locally tested: one reader, correlated replies,
+  authenticated event opt-in, 16-frame writer queue, slow-client disconnect and
+  detached-event discard. Native socket/client consumption remains pending.
 - [ ] Remote-only TE2 Termux POC, then owned local/external framework parity.
 - [ ] Desktop feature matrix and both-device lifecycle acceptance.
 - [ ] Separately approved POC publication and reusable SDK extraction.
