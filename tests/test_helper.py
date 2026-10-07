@@ -12,7 +12,7 @@ import threading
 
 from electromux.protocol import read_frame, write_frame
 from electromux.protocol import ProtocolError
-from electromux.helper import DeadlinePipe, declared_backend, Session, ConnectionWriter
+from electromux.helper import DeadlinePipe, declared_backend, Session, ConnectionWriter, endpoint_lease
 
 
 EVENT_BACKEND = """
@@ -89,6 +89,41 @@ class EventTests(unittest.TestCase):
 
 
 class HelperTests(unittest.TestCase):
+    def test_killed_helper_endpoint_recovers_without_starting_backend(self):
+        self.process.kill()
+        self.process.wait(timeout=5)
+        self.assertTrue(self.path.exists())
+        self.process.stderr.close()
+        self.process = subprocess.Popen([
+            sys.executable, "-m", "electromux.helper", "--socket", str(self.path),
+            "--session", "sample", "--token-file", str(self.path.parent / "token"),
+            "--recover-stale"], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        connection = socket.socket(socket.AF_UNIX)
+        connection.settimeout(2)
+        for _ in range(200):
+            try:
+                connection.connect(str(self.path)); break
+            except (ConnectionRefusedError, FileNotFoundError):
+                time.sleep(.01)
+        else:
+            self.fail("recovery failed to bind")
+        with connection, connection.makefile("rwb", buffering=0) as stream:
+            write_frame(stream, {"id": 1, "method": "hello", "version": 1,
+                "session": "sample", "token": self.token})
+            self.assertIn("result", read_frame(stream))
+            write_frame(stream, {"id": 2, "method": "status"})
+            state = read_frame(stream)["result"]
+            self.assertEqual(state["state"], "stopped")
+            self.assertIsNone(state["pid"])
+            self.assertEqual(len(state["helperInstanceId"]), 32)
+
+    def test_recovery_never_replaces_live_helper(self):
+        inode = self.path.stat().st_ino
+        with self.assertRaises(BlockingIOError):
+            with endpoint_lease(self.path, True):
+                self.fail("live owner lock bypassed")
+        self.assertEqual(inode, self.path.stat().st_ino)
+
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
         root = Path(self.temp.name)

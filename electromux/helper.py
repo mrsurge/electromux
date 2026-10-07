@@ -13,6 +13,11 @@ import sys
 import time
 import threading
 import queue
+import errno
+import fcntl
+import stat
+import uuid
+from contextlib import contextmanager
 from collections.abc import Callable
 
 from .protocol import ProtocolError, read_frame, write_frame
@@ -102,7 +107,8 @@ class Session:
     def status(self) -> dict[str, object]:
         live = self.child is not None and self.child.poll() is None
         return {"state": "ready" if live else "stopped",
-                "pid": self.child.pid if live and self.child else None}
+                "pid": self.child.pid if live and self.child else None,
+                "helperInstanceId": HELPER_INSTANCE_ID}
 
     def start(self) -> dict[str, object]:
         if self.status()["state"] == "ready":
@@ -249,7 +255,38 @@ def declared_backend(path: Path) -> Session:
     return Session(argv, cwd=cwd, env={**os.environ, **overrides}, stop_timeout=timeout)
 
 
-def serve(path: Path, session_id: str, token: str, backend: Path | None = None) -> None:
+HELPER_INSTANCE_ID = uuid.uuid4().hex
+
+
+@contextmanager
+def endpoint_lease(path: Path, recover_stale: bool = False):
+    """Never replace a live endpoint; serialize helper ownership through process death."""
+    if not path.parent.is_dir() or path.parent.stat().st_mode & 0o077:
+        raise RuntimeError("endpoint requires an existing private 0700 directory")
+    fd = os.open(str(path) + ".lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if path.exists() or path.is_symlink():
+            if not recover_stale or not stat.S_ISSOCK(path.lstat().st_mode):
+                raise RuntimeError("endpoint already exists; refusing replacement")
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+                probe.settimeout(1)
+                result = probe.connect_ex(str(path))
+            if result not in (errno.ECONNREFUSED, errno.ENOENT):
+                raise RuntimeError("endpoint may be live; refusing replacement")
+            path.unlink(missing_ok=True)
+        yield
+    finally:
+        os.close(fd)
+
+
+def serve(path: Path, session_id: str, token: str, backend: Path | None = None,
+          recover_stale: bool = False) -> None:
+    with endpoint_lease(path, recover_stale):
+        _serve_locked(path, session_id, token, backend)
+
+
+def _serve_locked(path: Path, session_id: str, token: str, backend: Path | None = None) -> None:
     if path.exists() or path.is_symlink():
         raise RuntimeError("endpoint already exists; refusing replacement")
     if not path.parent.is_dir() or path.parent.stat().st_mode & 0o077:
@@ -332,6 +369,7 @@ def main() -> None:
     parser.add_argument("--session", required=True)
     parser.add_argument("--token-file", type=Path, required=True)
     parser.add_argument("--backend-config", type=Path)
+    parser.add_argument("--recover-stale", action="store_true")
     args = parser.parse_args()
     info = args.token_file.stat()
     if info.st_mode & 0o077:
@@ -339,7 +377,7 @@ def main() -> None:
     token = args.token_file.read_text().strip()
     if len(token) < 32:
         parser.error("token must contain at least 32 characters")
-    serve(args.socket, args.session, token, args.backend_config)
+    serve(args.socket, args.session, token, args.backend_config, args.recover_stale)
 
 
 if __name__ == "__main__":

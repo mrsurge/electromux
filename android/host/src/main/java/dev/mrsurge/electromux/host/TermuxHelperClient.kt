@@ -7,6 +7,7 @@ import android.os.SystemClock
 import org.json.JSONObject
 import java.io.Closeable
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import dev.mrsurge.electromux.host.FrameCodec
@@ -43,7 +44,7 @@ class TermuxHelperClient(context: Context, installSpec: HelperInstallSpec,
         }
         check(!closed) { "Helper client closed" }
         check(File(session.socketPath).exists()) { "Helper socket not ready" }
-        val connection = LocalSocket()
+        val connection = connectEndpoint(session)
         synchronized(this) {
             if (closed) { connection.close(); error("Helper client closed") }
             socket = connection
@@ -51,7 +52,6 @@ class TermuxHelperClient(context: Context, installSpec: HelperInstallSpec,
         try {
             check(!closed) { "Helper client closed" }
             bounded {
-                connection.connect(LocalSocketAddress(session.socketPath, LocalSocketAddress.Namespace.FILESYSTEM))
                 connection.soTimeout = 5000
                 val id = nextId++
                 exchange(JSONObject().put("id", id).put("method", "hello").put("version", 1)
@@ -80,6 +80,32 @@ class TermuxHelperClient(context: Context, installSpec: HelperInstallSpec,
             }
             return call("status")
         } catch (error: Exception) { disconnect(); throw error }
+    }
+
+    private fun connectEndpoint(session: HelperSession): LocalSocket {
+        var recoveryDispatched = false
+        val deadline = SystemClock.elapsedRealtime() + 8000
+        while (true) {
+            check(!closed) { "Helper client closed" }
+            val connection = LocalSocket()
+            try {
+                connection.connect(LocalSocketAddress(session.socketPath, LocalSocketAddress.Namespace.FILESYSTEM))
+                return connection
+            } catch (error: IOException) {
+                connection.close()
+                // Android LocalSocket exposes the native connect errno as IOException text.
+                // No recovery for handshake/auth/timeouts or requests whose outcome is unknown.
+                if (error.message != "Connection refused" &&
+                    !(recoveryDispatched && error.message == "No such file or directory")) throw error
+                if (!recoveryDispatched) {
+                    recoveryDispatched = true
+                    launcher.launch(LaunchSpec("/data/data/com.termux/files/usr/bin/python",
+                        session.arguments() + "--recover-stale", session.packageRoot.path))
+                }
+                if (SystemClock.elapsedRealtime() >= deadline) throw error
+                Thread.sleep(50)
+            }
+        }
     }
 
     fun call(method: String): JSONObject {
