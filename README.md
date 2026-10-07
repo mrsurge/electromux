@@ -26,6 +26,22 @@ and no automatic retry. Signing/shared UID,
 renderer lifecycle and the complete round trip have separately recorded
 acceptance gates. See [intent security notes](docs/INTENT_SECURITY.md) and the tracker.
 
+## API-declared chrome surfaces
+
+Consumers declare a packaged chrome document with `ChromeSurfaceSpec`, its
+`ConsumerDescriptor`, placement and a bounded height. Calling `attach(host)`
+delegates rendering and returns a `Closeable`; `ChromeSurfaceHost` is the
+renderer-specific adapter. The core contract imports neither Cefrium nor any
+consumer application. Consumers own HTML/CSS, button listeners and action
+semantics; adapters own native attachment and lifecycle.
+
+Use the existing `ElectromuxBridge.create` query protocol for the chrome
+document. A consumer can expose an Electron-preload-shaped `request` and
+subscription facade without authorizing arbitrary IPC channels. This is not
+full BrowserWindow/Electron compatibility. Authorize the exact browser and
+packaged document, fence navigation/document generations, bound pending work,
+and dispose the renderer independently from backend ownership.
+
 ## Run the host-independent tests
 
 ```sh
