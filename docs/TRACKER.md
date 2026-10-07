@@ -178,3 +178,51 @@ sample has not been updated. This slice is uncommitted after checkpoint fdfb3f1.
 Source-only implementation; no APK/device/shared-framework changes. Existing
 installed sample and TE2 Termux clients remain unchanged. No Electron compatibility
 claim follows from this sample. All changes since fdfb3f1 remain uncommitted.
+
+Checkpoint `2644e07` records transport/renderer events locally (not pushed).
+
+## Native provisioning and sample service owner
+
+- [x] Native immutable consumer asset/declaration specification and reusable provisioner.
+- [x] Private bounded materialization, symlink/traversal guards, retained session credentials.
+- [x] Generic RuntimeOwner with serial queue and independently disposable event observers.
+- [x] Private started/bound non-sticky sample service owns client/protocol.
+- [x] Activity/page teardown detaches renderer only; service destruction closes transport,
+  never implicitly stops the Termux helper/backend or retries a launch.
+- [x] 27 JVM tests, 22 Python tests, browser regressions and Kotlin compilation.
+- [ ] APK/device recreation, background destruction and reconnect acceptance.
+- [ ] TE2 consumer provisioning/service/relay integration and Desktop settings parity.
+
+Source only; no APK, device, signing or shared framework mutation. No background
+survival guarantee. New sources remain uncommitted after the checkpoint.
+
+## Internal Android host library prerequisite (2026-10-07)
+
+- [x] Renderer-independent `android/host` library; sample consumes `project(":host")`.
+- [x] Move generic native policy/provisioning/transport/lifetime code and tests out
+  of sample; sample-specific ping/diagnostics/Cefrium/service remain consumer-owned.
+- [x] Shared TermuxHelperLauncher retains explicit installed identity verification.
+- [x] TermuxHelperClient exposes fixed lifecycle calls and consumer backend DTO
+  requests with host-assigned correlation, not sample-specific ping handling.
+- [x] AAR carries generic browser bridge and helper assets; sample adds only its
+  backend. AAR and sample merged assets match the authored source byte-for-byte;
+  host classes contain no sample/Cefrium dependency.
+- [x] 25 host JVM + 4 sample JVM tests, 23 Python tests, browser checks, library
+  assembly, sample Kotlin compilation and asset merge pass.
+- [x] Consumer route policy supports a native-declared exact loopback origin;
+  authorization remains exact-document, not origin-wide. Added regression coverage.
+- [x] Revalidation: 26 host + 4 sample JVM tests, 23 Python tests and browser
+  checks pass, together with host AAR assembly and sample Kotlin compilation.
+- [x] Checkpoint/push approved for the TE2 consumer dependency pin.
+- [ ] TE2 service/page/endpoint adapter integration, then APK/device lifecycle gates.
+
+AGP 9 library generated assets use its variant source API rather than the
+application source-set DSL, which threw a library source-set cast failure. This
+internal AAR is not Maven-published or a stable SDK. No APK assembly/device change,
+TE2 framework restart or device change occurred in this slice. Consumer pinning
+is a separate TE2 change; manual native integration remains the next gate.
+
+The bounded-event-queue regression permits the already-running callback to
+finish after transport closure; queued callbacks still cannot start. Its previous
+zero-delivery assertion raced that active callback, rather than testing the
+queue's actual shutdown contract.

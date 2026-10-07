@@ -1,5 +1,7 @@
 package dev.mrsurge.electromux.host
 
+import java.net.URI
+
 /** Native-owned declaration, never accepted from page input. APK identity is build-time. */
 class ConsumerDescriptor(
     val id: String,
@@ -9,6 +11,7 @@ class ConsumerDescriptor(
     routes: Map<String, String>,
     methods: Set<String>,
     events: Set<String>,
+    val localOrigin: String? = null,
 ) {
     val assets = assets.toSet()
     val routes = routes.toMap()
@@ -19,8 +22,16 @@ class ConsumerDescriptor(
         require(id.matches(Regex("[a-zA-Z0-9_.-]{1,80}")) && label.isNotBlank())
         require(entrypoint in this.routes)
         require(this.assets.isNotEmpty() && this.assets.all(::validAsset))
-        require(this.routes.keys.all { it.startsWith("file:///android_asset/") &&
-            it == "file:///android_asset/" + this.routes.getValue(it) })
+        if (localOrigin != null) {
+            val origin = URI(localOrigin)
+            require(origin.scheme == "http" && origin.host == "127.0.0.1" && origin.port in 1..65535 &&
+                origin.rawUserInfo == null && origin.rawQuery == null && origin.rawFragment == null &&
+                origin.rawPath.isEmpty() && localOrigin == "http://127.0.0.1:${origin.port}")
+        }
+        require(this.routes.keys.all {
+            it == "file:///android_asset/" + this.routes.getValue(it) ||
+                localOrigin != null && it == localOrigin + "/" + this.routes.getValue(it)
+        })
         require(this.routes.values.all { it in this.assets })
         require(this.methods.isNotEmpty())
         require((this.methods + this.events).all { it.matches(Regex("[a-zA-Z][a-zA-Z0-9_.-]{0,79}")) })

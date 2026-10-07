@@ -2,6 +2,33 @@
 
 Status: internal sample contract, version 1; not a stable SDK API.
 
+Native descriptors may also declare one exact `http://127.0.0.1:<port>` origin
+supplied by their local relay owner. Every authorized document must still match
+an explicit asset route byte-for-byte; queries/fragments, other ports, remote
+pages and localhost aliases are not authorized. Serving a page under that origin
+does not itself grant a method. The default file-asset policy remains unchanged.
+
+## Internal Android library boundary
+
+`android/host` builds a renderer-independent Android AAR. Native host classes,
+Termux identity/explicit launch, authenticated client transport and generic
+browser/helper assets live there. It imports neither the sample nor TE2/Cefrium,
+and registers no Android service/activity, signing/shared UID or execution
+permission automatically. Consumers own those declarations and lifecycle policy.
+The sample depends on `project(":host")`; it retains SampleConsumer, ping DTOs,
+diagnostic PendingIntent/result handling, Cefrium page adapter and its private
+service. The host's `requestBackend(JSONObject)` forwards consumer-validated
+payloads with host-assigned correlation IDs. Fixed helper lifecycle methods are
+separate; there is no generic page-to-command dispatch.
+
+The AAR includes `electromux-bridge.js` and three generic Python package assets;
+the sample supplies `sample_backend.py` separately. Other consumers must declare
+their bundled backend through HelperInstallSpec/BundledBackendSpec instead of
+relying on the helper CLI's sample default. This is source/build separation, not
+SDK stabilization, Maven publication or physical consumer compatibility proof.
+TE2 must consume a reproducible pinned source/artifact, never a sibling checkout
+path or copied sample classes. Its existing persistent service remains its owner.
+
 ## Session and ownership
 
 One helper owns at most one backend. A configured session identifier and random
@@ -51,8 +78,8 @@ one reader, serialized requests, strict correlation, declared event names,
 started frames and requests have five-second deadlines. Saturation or malformed/
 undeclared frames disconnect without replay. FrameCodec lives in the generic
 host package. Only native-configured nonempty event names enable hello opt-in.
-Renderer delivery now has a source implementation described below; persistent
-service ownership and physical acceptance remain separate gates. Do not
+Renderer delivery and private sample-service ownership now have source
+implementations described below; physical acceptance remains a separate gate. Do not
 attribute source tests to the previously installed sample.
 
 ## Document-fenced unsolicited renderer events
@@ -68,18 +95,49 @@ checks remain mandatory; documents with no explicit binding receive no async eve
 SamplePageBridge opts into declared helper events. Generic RendererEventGate
 requires the native-observed exact current URL and explicit document binding.
 Loading/navigation invalidates old tickets; IO-queued requests and UI-posted
-replies/events revalidate their generation. The sample queues a disconnect on
-navigation, ordered after in-flight work, without stopping the retained backend.
+replies/events revalidate their generation. Navigation removes the exact renderer
+subscription, without disconnecting the service-owned transport/backend.
 An already executing mutation is not undone or replayed. Reload starts with a
 fresh browser ID and explicit connection/state retrieval, never event replay.
 
 The sample wraps framed `data` in a JSON envelope and calls the installed
 receiver through quoted JSON text, not executable payload interpolation. A
-maximum of 16 event posts may await the Android UI thread; overflow disconnects
-the client, not the helper/backend. Close invalidates tickets before disposal.
+maximum of 16 event posts may await the Android UI thread; overflow removes
+only the offending renderer subscription. Close invalidates tickets before disposal.
 The sample backend preserves its reply-associated sample.updated notification
 and emits independent sample.state frames after ping. The Activity wires native
-loading/URL callbacks and teardown; no persistent service integration is claimed.
+loading/URL callbacks and teardown; the private started/bound sample service owns
+the client and protocol independently of Activity/page lifetime.
+
+## Native provisioning and sample runtime lifetime
+
+`HelperInstallSpec` is immutable native consumer configuration: private Termux
+home root, preference namespace and target-to-APK-asset map. `HelperProvisioner`
+materializes content-addressed packages (64 files, 8 MiB each, 32 MiB total),
+rejects traversal/symlink destinations, compares existing content, and publishes
+new private files through temporary-file rename. Existing session ID/token and
+uncertain-launch guard remain separate from package content. An optional
+`BundledBackendSpec` declares the exact Termux executable, bundled entrypoint,
+arguments/environment and stop deadline; it becomes an immutable private helper
+configuration, never page-provided argv. Provisioning is not an installer/rollback
+system and never replaces or stops a live helper. After a seed/declaration change,
+explicitly Shutdown the retained helper before expecting the new seed to execute.
+
+`RuntimeOwner` is host-neutral: one eight-item serial request queue and at most
+16 disposable observers. Observer failure removes that observer only. The sample's
+non-exported `SampleRuntimeService` owns this runtime, HelperClient and protocol;
+explicit native start/bind ignores incoming command extras, and the local Binder
+checks UID. MainActivity registers Cefrium callbacks before binding/loading the
+page. Activity destruction closes its bridge and unbinds, but does not stop the
+service or backend. Late Activity callbacks and stale document events are fenced.
+
+The service is `START_NOT_STICKY`, not a foreground/background-survival guarantee.
+Android can destroy it; destruction closes client resources without issuing Stop
+or Shutdown to Termux. A later explicit Connect reattaches to the retained helper,
+subject to existing socket/identity/uncertain-launch guards. No automatic launch
+retry, event replay, state polling or credential sharing with browser JavaScript.
+Service teardown and actual Activity/renderer recreation require device acceptance.
+TE2 persistent-service/relay integration is not implemented by this sample slice.
 
 The Android page bridge accepts only the exact bundled index URL and fixed
 connect/start/ping/status/detach/stop/shutdown operations. Native code owns all

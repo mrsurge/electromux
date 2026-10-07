@@ -5,7 +5,7 @@ plugins {
 
 val keyPath = providers.environmentVariable("ELECTROMUX_KEYSTORE").orNull
 val helperAssets = tasks.register<Sync>("bundleSampleHelper") {
-    from("../../electromux") { include("*.py"); into("helper/electromux") }
+    from("../../electromux") { include("sample_backend.py"); into("helper/electromux") }
     into(layout.buildDirectory.dir("generated/helperAssets"))
 }
 android {
@@ -51,6 +51,7 @@ configurations.configureEach {
 }
 
 dependencies {
+    implementation(project(":host"))
     implementation("com.cefrium:cefrium-sdk:0.9.0")
     testImplementation("junit:junit:4.13.2")
 }

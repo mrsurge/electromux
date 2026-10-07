@@ -1,4 +1,4 @@
-package dev.mrsurge.electromux.sample
+package dev.mrsurge.electromux.host
 
 import android.content.Context
 import android.net.LocalSocket
@@ -12,32 +12,44 @@ import java.util.concurrent.TimeUnit
 import dev.mrsurge.electromux.host.FrameCodec
 import dev.mrsurge.electromux.host.FramedTransport
 import dev.mrsurge.electromux.host.TransportFrame
+import dev.mrsurge.electromux.host.HelperProvisioner
+import dev.mrsurge.electromux.host.HelperInstallSpec
 
 /** Called only on the host's single bounded I/O lane. Never retries mutations. */
-class HelperClient(context: Context, private val eventNames: Set<String> = emptySet(),
+class TermuxHelperClient(context: Context, installSpec: HelperInstallSpec,
+                   private val eventNames: Set<String> = emptySet(),
                    private val onEvent: (String, JSONObject) -> Unit = { _, _ -> }) : Closeable {
-    private val provisioner = SampleProvisioner(context.applicationContext)
-    private val launcher = TermuxLaunchAdapter(context.applicationContext)
+    private val provisioner = HelperProvisioner(context.applicationContext, installSpec)
+    private val launcher = TermuxHelperLauncher(context.applicationContext)
     private val timer = Executors.newSingleThreadScheduledExecutor()
     @Volatile private var socket: LocalSocket? = null
     @Volatile private var transport: FramedTransport? = null
     private var nextId = 1
+    @Volatile private var closed = false
 
     fun connect(): JSONObject {
+        check(!closed) { "Helper client closed" }
         if (socket != null) return call("status")
         check(launcher.inspect().canLaunch) { "Termux identity unavailable" }
         val session = provisioner.prepare()
+        check(!closed) { "Helper client closed" }
         if (!File(session.socketPath).exists()) {
             check(!provisioner.attempted()) { "Previous launch outcome unknown; refusing duplicate launch" }
             provisioner.markAttempted(true)
-            launcher.launchHelper(session.launchSpec())
+            launcher.launch(LaunchSpec("/data/data/com.termux/files/usr/bin/python",
+                session.arguments(), session.packageRoot.path))
             val deadline = SystemClock.elapsedRealtime() + 8000
-            while (!File(session.socketPath).exists() && SystemClock.elapsedRealtime() < deadline) Thread.sleep(50)
+            while (!closed && !File(session.socketPath).exists() && SystemClock.elapsedRealtime() < deadline) Thread.sleep(50)
         }
+        check(!closed) { "Helper client closed" }
         check(File(session.socketPath).exists()) { "Helper socket not ready" }
         val connection = LocalSocket()
-        socket = connection
+        synchronized(this) {
+            if (closed) { connection.close(); error("Helper client closed") }
+            socket = connection
+        }
         try {
+            check(!closed) { "Helper client closed" }
             bounded {
                 connection.connect(LocalSocketAddress(session.socketPath, LocalSocketAddress.Namespace.FILESYSTEM))
                 connection.soTimeout = 5000
@@ -47,7 +59,8 @@ class HelperClient(context: Context, private val eventNames: Set<String> = empty
                     .put("events", eventNames.isNotEmpty()))
             }
             connection.soTimeout = 0 // Reader permits idle; partial frames remain bounded.
-            transport = FramedTransport(connection.inputStream, connection.outputStream,
+            check(!closed) { "Helper client closed" }
+            val nextTransport = FramedTransport(connection.inputStream, connection.outputStream,
                 { try { connection.close() } finally {
                     if (socket === connection) socket = null
                 } }, { raw ->
@@ -61,15 +74,28 @@ class HelperClient(context: Context, private val eventNames: Set<String> = empty
                         TransportFrame.Reply(id, raw)
                     }
                 }, eventNames, { frame -> onEvent(frame.name, JSONObject(frame.raw)) })
+            synchronized(this) {
+                if (closed || socket !== connection) { nextTransport.close(); error("Helper client closed") }
+                transport = nextTransport
+            }
             return call("status")
         } catch (error: Exception) { disconnect(); throw error }
     }
 
-    fun call(method: String, value: String = ""): JSONObject {
+    fun call(method: String): JSONObject {
+        require(method in setOf("status", "start", "stop", "detach", "shutdown"))
+        return send(method, null)
+    }
+
+    /** Consumer policy validates application methods; host supplies correlation. */
+    fun requestBackend(payload: JSONObject): JSONObject = send("request", payload)
+
+    private fun send(method: String, payload: JSONObject?): JSONObject {
+        check(!closed) { "Helper client closed" }
         check(socket != null) { "Connect the helper first" }
         val id = nextId++
-        val request = JSONObject().put("id", id).put("method", if (method == "ping") "request" else method)
-        if (method == "ping") request.put("payload", JSONObject().put("id", id).put("method", "ping").put("value", value))
+        val request = JSONObject().put("id", id).put("method", method)
+        if (payload != null) request.put("payload", JSONObject(payload.toString()).put("id", id))
         try {
             val reply = JSONObject(checkNotNull(transport).request(id, request.toString()))
             check(!reply.has("error") && reply.has("result")) { "Helper rejected request" }
@@ -95,7 +121,7 @@ class HelperClient(context: Context, private val eventNames: Set<String> = empty
         return try { operation() } finally { deadline.cancel(false) }
     }
 
-    fun disconnect() {
+    @Synchronized fun disconnect() {
         val oldTransport = transport
         transport = null
         oldTransport?.close()
@@ -103,5 +129,5 @@ class HelperClient(context: Context, private val eventNames: Set<String> = empty
         socket = null
         try { old?.close() } catch (_: Exception) { }
     }
-    override fun close() { disconnect(); timer.shutdownNow() }
+    @Synchronized override fun close() { closed = true; disconnect(); timer.shutdownNow() }
 }

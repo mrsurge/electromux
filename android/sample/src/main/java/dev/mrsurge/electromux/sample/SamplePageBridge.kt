@@ -1,39 +1,35 @@
 package dev.mrsurge.electromux.sample
 
-import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import com.cefrium.CefriumBrowser
 import java.io.Closeable
-import java.util.concurrent.ArrayBlockingQueue
-import java.util.concurrent.ThreadPoolExecutor
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.RejectedExecutionException
 import dev.mrsurge.electromux.host.RendererEventGate
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicInteger
 
-class SamplePageBridge(context: Context, private val evaluate: (String) -> Unit) : Closeable {
+class SamplePageBridge(private val service: SampleRuntimeService, private val evaluate: (String) -> Unit) : Closeable {
     private val main = Handler(Looper.getMainLooper())
-    private val io = ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS, ArrayBlockingQueue(8))
     private val gate = RendererEventGate(SampleConsumer.descriptor.routes.keys)
     private val pendingEvents = AtomicInteger()
-    private val client = HelperClient(context, SampleConsumer.descriptor.events, ::receiveEvent)
-    private val protocol = SampleConsumer.protocol(client)
+    private val protocol = service.protocol
+    private var subscription: Closeable? = null
     @Volatile private var closed = false
 
-    fun beginNavigation() {
+    @Synchronized fun beginNavigation() {
         gate.beginNavigation()
-        // Keep disconnect ordered after an already-running request. It cannot
-        // kill the retained backend; new document requests enter after this.
-        try { io.execute { client.disconnect() } }
-        catch (_: RejectedExecutionException) { client.disconnect() }
+        subscription?.close()
+        subscription = null
     }
 
-    fun changePage(page: String?) { gate.changePage(page) }
+    @Synchronized fun changePage(page: String?) {
+        gate.changePage(page)
+        if (gate.captureEvent() == null) { subscription?.close(); subscription = null }
+    }
 
-    private fun receiveEvent(name: String, frame: JSONObject) {
-        val ticket = gate.captureEvent() ?: return
+    private fun receiveEvent(ticket: RendererEventGate.Ticket, name: String, frame: JSONObject) {
+        if (!gate.accepts(ticket)) return
         if (name !in protocol.descriptor.events) return
         val payload = frame.optJSONObject("data") ?: return
         val envelope = JSONObject().put("documentId", ticket.documentId)
@@ -41,8 +37,7 @@ class SamplePageBridge(context: Context, private val evaluate: (String) -> Unit)
         if (envelope.toByteArray(Charsets.UTF_8).size > 65536) return
         if (pendingEvents.incrementAndGet() > 16) {
             pendingEvents.decrementAndGet()
-            client.disconnect() // Bound the UI queue too; never stop the backend.
-            return
+            throw IllegalStateException("Renderer event queue full") // Remove only this observer.
         }
         main.post {
             try {
@@ -67,9 +62,16 @@ class SamplePageBridge(context: Context, private val evaluate: (String) -> Unit)
             return true
         }
         try {
-            io.execute {
+            service.runtime.execute {
                 if (!gate.current(generation, origin!!)) return@execute
-                try { gate.bind(generation, origin, parsed.documentId) }
+                try { synchronized(this) {
+                    check(!closed && gate.current(generation, origin))
+                    gate.bind(generation, origin, parsed.documentId)
+                    val ticket = gate.captureEvent()
+                    if (subscription == null && ticket != null) {
+                        subscription = service.runtime.subscribe { event -> receiveEvent(ticket, event.name, event.frame) }
+                    }
+                } }
                 catch (_: Exception) {
                     main.post { if (gate.current(generation, origin)) callback.failure(403, "Renderer document identity rejected") }
                     return@execute
@@ -77,16 +79,18 @@ class SamplePageBridge(context: Context, private val evaluate: (String) -> Unit)
                 val response = protocol.execute(parsed)
                 main.post { if (!closed && gate.current(generation, origin)) callback.success(response.toString()) }
             }
+        } catch (_: IllegalStateException) {
+            callback.failure(503, "Sample runtime unavailable")
         } catch (_: RejectedExecutionException) {
             callback.failure(429, "Sample I/O queue is full or closed")
         }
         return true
     }
 
-    override fun close() {
+    @Synchronized override fun close() {
         closed = true
         gate.close()
-        client.close()
-        io.shutdownNow()
+        subscription?.close()
+        subscription = null
     }
 }

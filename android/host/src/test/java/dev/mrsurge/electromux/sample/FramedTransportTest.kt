@@ -89,14 +89,21 @@ class FramedTransportTest {
     @Test fun blockedEventConsumerHasBoundedQueue() {
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
-        var delivered = 0
-        Harness(event = { entered.countDown(); release.await(); delivered++ }).use { h ->
+        val finished = CountDownLatch(1)
+        val delivered = java.util.concurrent.atomic.AtomicInteger()
+        Harness(event = {
+            entered.countDown()
+            try { release.await(); delivered.incrementAndGet() } finally { finished.countDown() }
+        }).use { h ->
             try {
                 h.send("event:state"); assertTrue(entered.await(2, TimeUnit.SECONDS))
                 repeat(17) { h.send("event:state") }
                 assertTrue(h.closed.await(2, TimeUnit.SECONDS))
             } finally { release.countDown() }
-            assertEquals(0, delivered) // Queued events cannot reach a closed consumer.
+            assertTrue(finished.await(2, TimeUnit.SECONDS))
+            // The already-running callback may finish or be interrupted. No
+            // queued callbacks may start; close cannot undo an active observer.
+            assertTrue(delivered.get() <= 1)
         }
     }
 }

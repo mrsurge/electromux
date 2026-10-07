@@ -38,6 +38,26 @@ repeated inside Termux before device acceptance.
 
 ## Android scaffold
 
+The internal `android/host` Android library contains the reusable native
+descriptor, page protocol, framing/event gates, runtime owner, provisioning and
+Termux helper client/launcher. It has no Cefrium or TE2 dependency and declares
+no application, service or signing identity. Its AAR carries the generic browser
+bridge and helper Python assets; consumers supply their backend declaration,
+branding, Activity/browser and service owner. `android/sample` consumes this
+module rather than compiling another copy of it. This is an internal integration
+boundary, not a stable/public Electron-compatible SDK or Maven publication.
+
+Build the library and validate the sample without creating an APK:
+
+```sh
+cd android
+./gradlew :host:testDebugUnitTest :host:assembleDebug :sample:testDebugUnitTest :sample:compileDebugKotlin :sample:mergeDebugAssets
+```
+
+The library output is `android/host/build/outputs/aar/host-debug.aar`; do not
+commit that generated artifact or use an unversioned developer path as a shipping
+dependency. A pinned source/artifact consumption lane for TE2 remains the next gate.
+
 From `android/`, use the pinned Gradle wrapper with JDK 25 and SDK 37. No
 signing key is committed. Set `ELECTROMUX_KEYSTORE`, `ELECTROMUX_STORE_PASSWORD`,
 `ELECTROMUX_KEY_ALIAS`, and `ELECTROMUX_KEY_PASSWORD` to a deliberately selected

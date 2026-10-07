@@ -23,12 +23,4 @@ class FrameCodecTest {
         }
     }
 
-    @Test fun bridgeRequiresExactPageAndFixedMethods() {
-        val descriptor = SampleConsumer.descriptor
-        assertTrue(descriptor.allows(descriptor.entrypoint, "ping"))
-        for (origin in listOf(null, "https://example.com", "file:///android_asset/other.html", descriptor.entrypoint + "?x")) {
-            assertFalse(descriptor.allows(origin, "ping"))
-        }
-        assertFalse(descriptor.allows(descriptor.entrypoint, "execute"))
-    }
 }

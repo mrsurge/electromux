@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "electromux-sample"
 include(":sample")
+include(":host")

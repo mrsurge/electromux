@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
-const Bridge = require('../android/sample/src/main/assets/electromux-bridge.js');
+const Bridge = require('../android/host/src/main/assets/electromux-bridge.js');
 
 (async () => {
   let pending;

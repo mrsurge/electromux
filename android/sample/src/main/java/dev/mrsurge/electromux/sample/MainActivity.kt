@@ -1,33 +1,53 @@
 package dev.mrsurge.electromux.sample
 
 import android.app.Activity
+import android.content.ComponentName
+import android.content.Intent
+import android.content.ServiceConnection
+import android.os.IBinder
 import android.os.Bundle
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.cefrium.CefriumBrowser
+import dev.mrsurge.electromux.host.LaunchSpec
 
 /** Independent bundled-page sample with native-owned authenticated helper controls. */
 class MainActivity : Activity() {
     private lateinit var browser: CefriumBrowser
     private lateinit var pageBridge: SamplePageBridge
+    private var bound = false
+    private var destroyed = false
+    private val connection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            if (destroyed) return
+            val service = (binder as SampleRuntimeService.LocalBinder).service()
+            if (::pageBridge.isInitialized) pageBridge.close()
+            pageBridge = SamplePageBridge(service) { script -> browser.evaluateJavaScript(script) }
+            pageBridge.beginNavigation()
+            browser.loadUrl(SampleConsumer.descriptor.entrypoint)
+        }
+        override fun onServiceDisconnected(name: ComponentName?) {
+            if (::pageBridge.isInitialized) pageBridge.close()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         browser = CefriumBrowser.createWithSurface(this)
         browser.setPinchToZoomEnabled(false)
-        pageBridge = SamplePageBridge(this) { script -> browser.evaluateJavaScript(script) }
         browser.setQueryHandler { _, request, origin, callback ->
-            pageBridge.handle(request, origin, callback)
+            if (::pageBridge.isInitialized) pageBridge.handle(request, origin, callback)
+            else { callback.failure(503, "Runtime not connected"); true }
         }
         // Cefrium 0.9.0 setQueryHandler stores only the Java field. This public
         // listener also registers the browser's native callback/bridge target.
         var wasLoading = false
         browser.setOnLoadingStateChangedListener { loading, _, _ ->
-            if (loading && !wasLoading) pageBridge.beginNavigation()
+            if (loading && !wasLoading && ::pageBridge.isInitialized) pageBridge.beginNavigation()
             wasLoading = loading
         }
-        browser.setOnUrlChangedListener { url -> pageBridge.changePage(url) }
+        browser.setOnUrlChangedListener { url -> if (::pageBridge.isInitialized) pageBridge.changePage(url) }
         val adapter = TermuxLaunchAdapter(this)
         val status = TextView(this)
         val inspect = Button(this).apply {
@@ -62,13 +82,17 @@ class MainActivity : Activity() {
         setContentView(layout)
         // Placeholder asset URL. Prove Cefrium's supported local hosting API
         // before claiming stable-origin module/worker/bridge behavior.
-        pageBridge.beginNavigation()
-        browser.loadUrl(SampleConsumer.descriptor.entrypoint)
+        val runtimeIntent = Intent(this, SampleRuntimeService::class.java)
+        startService(runtimeIntent)
+        bound = bindService(runtimeIntent, connection, BIND_AUTO_CREATE)
+        if (!bound) status.text = "Runtime binding unavailable"
     }
 
     override fun onDestroy() {
+        destroyed = true
         DiagnosticCompletion.observe(null)
         if (::pageBridge.isInitialized) pageBridge.close()
+        if (bound) { unbindService(connection); bound = false }
         if (::browser.isInitialized) browser.close()
         super.onDestroy()
     }

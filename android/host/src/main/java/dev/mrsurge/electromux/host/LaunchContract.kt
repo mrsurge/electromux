@@ -1,4 +1,4 @@
-package dev.mrsurge.electromux.sample
+package dev.mrsurge.electromux.host
 
 /** Only native consumer configuration constructs this value; never deserialize it from a page. */
 data class LaunchSpec(val executable: String, val arguments: List<String>, val cwd: String) {
@@ -21,8 +21,8 @@ data class IdentityStatus(
     val canLaunch: Boolean get() = installed && sameUid && sameSignature && serviceAvailable
     fun summary(): String = when {
         !installed -> "Termux is not installed or is not visible."
-        !sameSignature -> "Sample and Termux signing certificates do not match."
-        !sameUid -> "Sample and Termux do not share an installed UID."
+        !sameSignature -> "Host and Termux signing certificates do not match."
+        !sameUid -> "Host and Termux do not share an installed UID."
         !serviceAvailable -> "Termux execution service is unavailable."
         else -> "Identity checks passed. Device execution remains to be verified."
     }

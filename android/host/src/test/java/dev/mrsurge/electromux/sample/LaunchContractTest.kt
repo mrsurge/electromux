@@ -1,5 +1,8 @@
 package dev.mrsurge.electromux.sample
 
+import dev.mrsurge.electromux.host.LaunchSpec
+import dev.mrsurge.electromux.host.IdentityStatus
+
 import org.junit.Assert.*
 import org.junit.Test
 
