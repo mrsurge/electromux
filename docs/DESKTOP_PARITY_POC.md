@@ -23,6 +23,21 @@ Source references in the TE2 repository:
 
 ## Reusable host contract
 
+### Electron subset and unrelated-consumer acceptance
+
+The product target is a useful Electron-compatible subset for Termux applications
+on Android, not every Electron API and not a TE2-specific host. Preserve familiar
+Electron contracts where supported; explicitly reject unsupported capabilities
+rather than silently changing semantics. After the working TE2 consumer, the
+user will supply an unrelated small Electron app for an almost-drop-in build
+and behavior test. Record required edits, supported APIs and remaining gaps.
+Compatibility remains a goal until that independent acceptance passes.
+
+Future filesystem/process services may transparently anchor in
+`/data/data/com.termux/files/` through the proven shared UID. This is a planned
+adapter boundary, not permission to add filesystem services now or to leak
+TE2/Termux plumbing into application business logic.
+
 Consumer configuration supplies application identity/branding (label, icons,
 splash), packaged entrypoints/resources, declared asset/custom routes, guarded
 consumer bridge methods, backend launch configuration and installation adapter.

@@ -49,18 +49,45 @@ const Bridge = require('../android/sample/src/main/assets/electromux-bridge.js')
   await assert.rejects(bounded.request('ping', {value: 'x'.repeat(4096)}), /too large/);
   bounded.dispose();
 
+  const documentId = 'renderer_document_123456';
+  const asynchronous = Bridge.create({query: request => {pending = request;},
+    methods: ['ping'], events: ['state'], documentId});
+  const received = [];
+  asynchronous.on('state', value => { received.push(value); });
+  const event = JSON.stringify({documentId, name: 'state', payload: {ready: true}});
+  assert.equal(asynchronous.receiveEvent(event), true);
+  assert.deepEqual(received, [{ready: true}]);
+  assert.equal(asynchronous.receiveEvent(JSON.stringify({documentId: 'other_document_123456', name: 'state', payload: {}})), false);
+  assert.equal(asynchronous.receiveEvent(JSON.stringify({documentId, name: 'other', payload: {}})), false);
+  assert.equal(asynchronous.receiveEvent('{invalid'), false);
+  assert.equal(asynchronous.receiveEvent('x'.repeat(65537)), false);
+  promise = asynchronous.request('ping');
+  assert.equal(JSON.parse(pending.request).documentId, documentId);
+  pending.onSuccess(JSON.stringify({id: 1, result: {ok: true, value: {}}}));
+  await promise;
+  asynchronous.dispose();
+  assert.equal(asynchronous.receiveEvent(event), false);
+  assert.equal(received.length, 1);
+  const replacement = Bridge.create({query() {}, methods: ['ping'], events: ['state'],
+    documentId: 'replacement_document_123456'});
+  assert.equal(replacement.receiveEvent(event), false);
+  replacement.dispose();
+
   const status = {textContent: ''}, result = {textContent: ''};
   const buttons = ['connect', 'ping'].map(method => ({dataset: {method}, disabled: false,
     addEventListener(_, callback) { this.click = callback; }}));
+  const pageListeners = {};
+  const pageWindow = {ElectromuxBridge: Bridge, crypto: {getRandomValues: values => values.fill(1)},
+    cefriumQuery: request => {pending = request;}, addEventListener(name, listener) {pageListeners[name] = listener;}};
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,
     '../android/sample/src/main/assets/sample.js'), 'utf8'), {
     document: {getElementById: id => id === 'status' ? status : result, querySelectorAll: () => buttons},
-    window: {ElectromuxBridge: Bridge, cefriumQuery: request => {pending = request;}, addEventListener() {}},
+    window: pageWindow,
   });
   promise = buttons[0].click();
   assert.ok(buttons.every(button => button.disabled));
   buttons[1].click();
-  assert.deepEqual(JSON.parse(pending.request), {id: 1, method: 'connect', params: {}});
+  assert.deepEqual(JSON.parse(pending.request), {id: 1, method: 'connect', params: {}, documentId: '01'.repeat(16)});
   pending.onSuccess(JSON.stringify({id: 1, result: {ok: true, value: {state: 'stopped'}}}));
   await promise;
   assert.equal(status.textContent, 'Completed connect');
@@ -69,5 +96,12 @@ const Bridge = require('../android/sample/src/main/assets/electromux-bridge.js')
   await promise;
   assert.match(status.textContent, /rejected \(403\)/);
   assert.ok(buttons.every(button => !button.disabled));
+  assert.equal(pageWindow.__electromuxReceiveEvent(JSON.stringify({documentId: '01'.repeat(16),
+    name: 'sample.state', payload: {id: 7, state: 'ready'}})), true);
+  assert.match(result.textContent, /Native event: sample.state \(7, ready\)/);
+  const staleReceiver = pageWindow.__electromuxReceiveEvent;
+  pageListeners.pagehide();
+  assert.equal(pageWindow.__electromuxReceiveEvent, undefined);
+  assert.equal(staleReceiver(JSON.stringify({documentId: '01'.repeat(16), name: 'sample.state', payload: {}})), false);
   console.log('Bridge response/event/disposal/deadline and sample single-flight checks passed');
 })().catch(error => {console.error(error); process.exitCode = 1;});

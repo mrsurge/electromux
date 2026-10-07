@@ -16,13 +16,18 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         browser = CefriumBrowser.createWithSurface(this)
         browser.setPinchToZoomEnabled(false)
-        pageBridge = SamplePageBridge(this)
+        pageBridge = SamplePageBridge(this) { script -> browser.evaluateJavaScript(script) }
         browser.setQueryHandler { _, request, origin, callback ->
             pageBridge.handle(request, origin, callback)
         }
         // Cefrium 0.9.0 setQueryHandler stores only the Java field. This public
         // listener also registers the browser's native callback/bridge target.
-        browser.setOnLoadingStateChangedListener { _, _, _ -> }
+        var wasLoading = false
+        browser.setOnLoadingStateChangedListener { loading, _, _ ->
+            if (loading && !wasLoading) pageBridge.beginNavigation()
+            wasLoading = loading
+        }
+        browser.setOnUrlChangedListener { url -> pageBridge.changePage(url) }
         val adapter = TermuxLaunchAdapter(this)
         val status = TextView(this)
         val inspect = Button(this).apply {
@@ -57,6 +62,7 @@ class MainActivity : Activity() {
         setContentView(layout)
         // Placeholder asset URL. Prove Cefrium's supported local hosting API
         // before claiming stable-origin module/worker/bridge behavior.
+        pageBridge.beginNavigation()
         browser.loadUrl(SampleConsumer.descriptor.entrypoint)
     }
 

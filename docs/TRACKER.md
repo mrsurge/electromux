@@ -13,7 +13,8 @@ the first bridge slice was separately approved with targeted local validation.
 - [ ] Prove unsolicited native event delivery and renderer lifecycle fencing.
   Helper transport foundation is locally tested: one reader, correlated replies,
   authenticated event opt-in, 16-frame writer queue, slow-client disconnect and
-  detached-event discard. Native socket/client consumption remains pending.
+  detached-event discard. Generic Kotlin stream demultiplexing now compiles and
+  has JVM coverage; renderer delivery and service integration remain pending.
 - [ ] Remote-only TE2 Termux POC, then owned local/external framework parity.
 - [ ] Desktop feature matrix and both-device lifecycle acceptance.
 - [ ] Separately approved POC publication and reusable SDK extraction.
@@ -144,3 +145,36 @@ implemented, unsolicited streaming is not. Android compilation and 11 JVM tests,
 No APK assembly, device modifications, TE2 runtime changes, commit or publication
 was performed in this slice. Installed Pixel sample remains the earlier bridge
 build; its acceptance must not be attributed to these new source changes.
+
+## Generic native reply/event transport (2026-10-06)
+
+- [x] Move FrameCodec into reusable host package.
+- [x] Add stream-injected FramedTransport with one reader and serialized requests.
+- [x] Separate declared events from correlated replies; bounded 16-callback queue.
+- [x] Idle-safe read, partial-frame/request deadlines, fail-closed disposal, no replay.
+- [x] Adapt HelperClient after authenticated hello; sample remains request-only.
+- [x] Seven JVM transport regressions plus existing sample tests; Kotlin compilation.
+- [ ] Renderer/page event subscription and lifecycle fences.
+- [ ] Generic consumer provisioning and TE2 persistent-service/relay integration.
+- [ ] New APK and physical acceptance (not approved in this source-only slice).
+
+No manifest, signing, Termux launch authority, device state or shared framework
+changes. Native configuration alone supplies event names/callbacks. Connection
+disposal does not stop the retained helper/backend. The existing installed Pixel
+sample has not been updated. This slice is uncommitted after checkpoint fdfb3f1.
+
+## Document-fenced renderer events
+
+- [x] Optional browser document ID and generic receiveEvent with declared listeners/disposal.
+- [x] Native RendererEventGate checks exact current page and document/generation binding.
+- [x] Sample native event opt-in and quoted-JSON UI delivery (maximum 16 pending posts).
+- [x] Loading/URL callbacks invalidate stale requests/replies/events; disconnect never stops backend.
+- [x] Independent sample.state helper frame; reply-associated sample.updated retained.
+- [x] 22 JVM tests (four renderer-lifetime regressions), 21 Python tests, browser
+  wrong-document/malformed/disposal regressions and Android Kotlin compilation.
+- [ ] APK/physical verification of callback ordering, reload and unsolicited delivery.
+- [ ] Generic provisioning and persistent-service integration for TE2 consumer.
+
+Source-only implementation; no APK/device/shared-framework changes. Existing
+installed sample and TE2 Termux clients remain unchanged. No Electron compatibility
+claim follows from this sample. All changes since fdfb3f1 remain uncommitted.

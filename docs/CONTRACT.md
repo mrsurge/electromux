@@ -44,8 +44,42 @@ One writer per connection serializes frames with a bounded 16-frame queue;
 overflow disconnects the slow client without stopping the backend. No detached
 event history is retained or replayed. A reconnect reads current application
 state explicitly. Existing request-only clients need not opt in and receive no
-unsolicited frames. Android's existing sample client remains request-only until
-its socket reader and renderer lifecycle/event authorization are upgraded.
+unsolicited frames. Android's sample remains request-only by default. Its
+HelperClient now delegates post-handshake I/O to generic `host.FramedTransport`:
+one reader, serialized requests, strict correlation, declared event names,
+16 queued event callbacks and connection-scoped disposal. Idle is permitted;
+started frames and requests have five-second deadlines. Saturation or malformed/
+undeclared frames disconnect without replay. FrameCodec lives in the generic
+host package. Only native-configured nonempty event names enable hello opt-in.
+Renderer delivery now has a source implementation described below; persistent
+service ownership and physical acceptance remain separate gates. Do not
+attribute source tests to the previously installed sample.
+
+## Document-fenced unsolicited renderer events
+
+The generic browser bridge accepts an optional per-document `documentId`
+(16-80 URL-safe characters). It adds that value to requests and exposes
+`receiveEvent(raw)` alongside request/on/dispose. Unsolicited envelopes contain
+`documentId`, declared `name`, and object `payload`; wrong-document, undeclared,
+malformed, oversized or disposed deliveries are rejected. This ID is a lifetime
+fence, not authentication or a command credential. Native exact-page/method
+checks remain mandatory; documents with no explicit binding receive no async events.
+
+SamplePageBridge opts into declared helper events. Generic RendererEventGate
+requires the native-observed exact current URL and explicit document binding.
+Loading/navigation invalidates old tickets; IO-queued requests and UI-posted
+replies/events revalidate their generation. The sample queues a disconnect on
+navigation, ordered after in-flight work, without stopping the retained backend.
+An already executing mutation is not undone or replayed. Reload starts with a
+fresh browser ID and explicit connection/state retrieval, never event replay.
+
+The sample wraps framed `data` in a JSON envelope and calls the installed
+receiver through quoted JSON text, not executable payload interpolation. A
+maximum of 16 event posts may await the Android UI thread; overflow disconnects
+the client, not the helper/backend. Close invalidates tickets before disposal.
+The sample backend preserves its reply-associated sample.updated notification
+and emits independent sample.state frames after ping. The Activity wires native
+loading/URL callbacks and teardown; no persistent service integration is claimed.
 
 The Android page bridge accepts only the exact bundled index URL and fixed
 connect/start/ping/status/detach/stop/shutdown operations. Native code owns all

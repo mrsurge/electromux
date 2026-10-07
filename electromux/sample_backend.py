@@ -15,6 +15,9 @@ def main() -> None:
                 "result": {"pong": request.get("value"),
                            "events": [{"event": "sample.updated", "id": identifier}]},
             })
+            # An independent frame, not reply-associated browser notification data.
+            write_frame(sys.stdout.buffer, {"event": "sample.state",
+                                            "data": {"id": identifier, "state": "ready"}})
         else:
             write_frame(sys.stdout.buffer, {"id": identifier, "error": "unknown method"})
 

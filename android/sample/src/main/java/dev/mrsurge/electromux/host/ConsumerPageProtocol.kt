@@ -14,7 +14,7 @@ class ConsumerPageProtocol(
     private val handlers = handlers.toMap()
     init { require(this.handlers.keys == descriptor.methods) }
 
-    data class Request(val id: Int, val method: String, val params: JSONObject)
+    data class Request(val id: Int, val method: String, val params: JSONObject, val documentId: String? = null)
 
     fun parse(raw: String, page: String?): Request {
         require(raw.toByteArray(Charsets.UTF_8).size in 1..4096)
@@ -23,9 +23,11 @@ class ConsumerPageProtocol(
         val method = json.opt("method")
         val params = json.opt("params")
         require(id is Int && id > 0 && method is String && params is JSONObject)
-        require(json.keys().asSequence().all { it in setOf("id", "method", "params") })
+        val documentId = if (json.has("documentId")) json.get("documentId") else null
+        require(documentId == null || documentId is String && documentId.matches(Regex("[a-zA-Z0-9_-]{16,80}")))
+        require(json.keys().asSequence().all { it in setOf("id", "method", "params", "documentId") })
         require(descriptor.allows(page, method))
-        return Request(id, method, params)
+        return Request(id, method, params, documentId as String?)
     }
 
     fun execute(request: Request): JSONObject {

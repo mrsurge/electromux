@@ -1,4 +1,4 @@
-package dev.mrsurge.electromux.sample
+package dev.mrsurge.electromux.host
 
 import java.io.DataInputStream
 import java.io.DataOutputStream
@@ -14,9 +14,12 @@ object FrameCodec {
         require(bytes.size in 1..MAX_FRAME)
         DataOutputStream(stream).apply { writeInt(bytes.size); write(bytes); flush() }
     }
-    fun read(stream: InputStream): String {
+    fun read(stream: InputStream, frameStarted: () -> Unit = {}): String {
         val input = DataInputStream(stream)
-        val size = input.readInt()
+        val first = input.readUnsignedByte() // Idle may wait; partial frames may not.
+        frameStarted()
+        val size = (first shl 24) or (input.readUnsignedByte() shl 16) or
+            (input.readUnsignedByte() shl 8) or input.readUnsignedByte()
         require(size in 1..MAX_FRAME)
         val bytes = ByteArray(size)
         input.readFully(bytes)

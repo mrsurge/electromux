@@ -168,6 +168,19 @@ class HelperTests(unittest.TestCase):
     def test_socket_permissions(self) -> None:
         self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
 
+    def test_sample_unsolicited_event_is_a_separate_authenticated_frame(self) -> None:
+        client, stream, _ = self.connect(events=True)
+        with client, stream:
+            self.call(stream, "start")
+            write_frame(stream, {"id": 2, "method": "request",
+                                 "payload": {"id": 10, "method": "ping", "value": "events"}})
+            frames = [read_frame(stream), read_frame(stream)]
+            reply = next(frame for frame in frames if frame.get("id") == 2)
+            event = next(frame for frame in frames if frame.get("event") == "sample.state")
+            self.assertEqual(reply["result"]["result"]["pong"], "events")
+            self.assertEqual(event["data"], {"id": 10, "state": "ready"})
+            self.assertNotIn("id", event)
+
     def test_authenticated_shutdown_reaps_helper_and_backend(self) -> None:
         client, stream, _ = self.connect()
         with client, stream:

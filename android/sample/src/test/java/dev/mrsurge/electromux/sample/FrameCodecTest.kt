@@ -1,5 +1,7 @@
 package dev.mrsurge.electromux.sample
 
+import dev.mrsurge.electromux.host.FrameCodec
+
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.ByteArrayInputStream

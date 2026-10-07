@@ -1,16 +1,26 @@
 'use strict';
 (() => {
   let busy = false;
+  const documentId = [...window.crypto.getRandomValues(new Uint8Array(16))]
+    .map(value => value.toString(16).padStart(2, '0')).join('');
   const bridge = window.ElectromuxBridge.create({
     query: options => window.cefriumQuery(options),
     methods: ['connect', 'start', 'ping', 'status', 'detach', 'stop', 'shutdown'],
-    events: ['sample.updated'],
+    events: ['sample.updated', 'sample.state'],
+    documentId,
   });
-  window.addEventListener('pagehide', () => bridge.dispose(), {once: true});
+  window.__electromuxReceiveEvent = bridge.receiveEvent;
+  window.addEventListener('pagehide', () => {
+    bridge.dispose();
+    delete window.__electromuxReceiveEvent;
+  }, {once: true});
   const status = document.getElementById('status');
   const result = document.getElementById('result');
   bridge.on('sample.updated', payload => {
     document.getElementById('event').textContent = `Event: sample.updated (${payload.id})`;
+  });
+  bridge.on('sample.state', payload => {
+    document.getElementById('event').textContent = `Native event: sample.state (${payload.id}, ${payload.state})`;
   });
   const buttons = [...document.querySelectorAll('[data-method]')];
   for (const button of buttons) button.addEventListener('click', async () => {

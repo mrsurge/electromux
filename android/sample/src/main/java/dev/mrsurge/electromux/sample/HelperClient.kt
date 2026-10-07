@@ -9,13 +9,18 @@ import java.io.Closeable
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import dev.mrsurge.electromux.host.FrameCodec
+import dev.mrsurge.electromux.host.FramedTransport
+import dev.mrsurge.electromux.host.TransportFrame
 
 /** Called only on the host's single bounded I/O lane. Never retries mutations. */
-class HelperClient(context: Context) : Closeable {
+class HelperClient(context: Context, private val eventNames: Set<String> = emptySet(),
+                   private val onEvent: (String, JSONObject) -> Unit = { _, _ -> }) : Closeable {
     private val provisioner = SampleProvisioner(context.applicationContext)
     private val launcher = TermuxLaunchAdapter(context.applicationContext)
     private val timer = Executors.newSingleThreadScheduledExecutor()
     @Volatile private var socket: LocalSocket? = null
+    @Volatile private var transport: FramedTransport? = null
     private var nextId = 1
 
     fun connect(): JSONObject {
@@ -38,8 +43,24 @@ class HelperClient(context: Context) : Closeable {
                 connection.soTimeout = 5000
                 val id = nextId++
                 exchange(JSONObject().put("id", id).put("method", "hello").put("version", 1)
-                    .put("session", session.id).put("token", session.token))
+                    .put("session", session.id).put("token", session.token)
+                    .put("events", eventNames.isNotEmpty()))
             }
+            connection.soTimeout = 0 // Reader permits idle; partial frames remain bounded.
+            transport = FramedTransport(connection.inputStream, connection.outputStream,
+                { try { connection.close() } finally {
+                    if (socket === connection) socket = null
+                } }, { raw ->
+                    val frame = JSONObject(raw)
+                    if (frame.has("event")) {
+                        check(!frame.has("id") && frame.opt("event") is String)
+                        TransportFrame.Event(frame.getString("event"), raw)
+                    } else {
+                        val id = frame.opt("id")
+                        check(id is Int)
+                        TransportFrame.Reply(id, raw)
+                    }
+                }, eventNames, { frame -> onEvent(frame.name, JSONObject(frame.raw)) })
             return call("status")
         } catch (error: Exception) { disconnect(); throw error }
     }
@@ -50,7 +71,9 @@ class HelperClient(context: Context) : Closeable {
         val request = JSONObject().put("id", id).put("method", if (method == "ping") "request" else method)
         if (method == "ping") request.put("payload", JSONObject().put("id", id).put("method", "ping").put("value", value))
         try {
-            val response = bounded { exchange(request) }
+            val reply = JSONObject(checkNotNull(transport).request(id, request.toString()))
+            check(!reply.has("error") && reply.has("result")) { "Helper rejected request" }
+            val response = reply.getJSONObject("result")
             if (method == "detach" || method == "shutdown") disconnect()
             if (method == "shutdown") provisioner.markAttempted(false)
             return response
@@ -73,6 +96,9 @@ class HelperClient(context: Context) : Closeable {
     }
 
     fun disconnect() {
+        val oldTransport = transport
+        transport = null
+        oldTransport?.close()
         val old = socket
         socket = null
         try { old?.close() } catch (_: Exception) { }

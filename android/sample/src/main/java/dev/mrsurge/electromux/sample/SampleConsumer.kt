@@ -12,7 +12,7 @@ object SampleConsumer {
         setOf("index.html", "sample.js", "electromux-bridge.js"),
         mapOf("file:///android_asset/index.html" to "index.html"),
         setOf("connect", "start", "ping", "status", "detach", "stop", "shutdown"),
-        setOf("sample.updated"),
+        setOf("sample.updated", "sample.state"),
     )
 
     fun protocol(client: HelperClient) = ConsumerPageProtocol(descriptor,

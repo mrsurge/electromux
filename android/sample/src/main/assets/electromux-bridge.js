@@ -5,14 +5,33 @@
   else root.ElectromuxBridge = factory();
 })(typeof globalThis === 'object' ? globalThis : this, () => {
   const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
-  function create({query, methods, events = [], timeoutMs = 10000, maxPending = 8}) {
+  function create({query, methods, events = [], documentId = null, timeoutMs = 10000, maxPending = 8}) {
     if (typeof query !== 'function' || !Number.isFinite(timeoutMs) || timeoutMs <= 0 ||
         !Number.isInteger(maxPending) || maxPending < 1 || maxPending > 64) throw new Error('Invalid bridge configuration');
+    if (documentId !== null && (typeof documentId !== 'string' || !/^[a-zA-Z0-9_-]{16,80}$/.test(documentId)))
+      throw new Error('Invalid renderer document identity');
     const allowed = new Set(methods);
     const listeners = new Map(events.map(name => [name, new Set()]));
     const pending = new Map();
     let nextId = 1;
     let closed = false;
+    function deliver(name, payload) {
+      for (const callback of [...listeners.get(name)]) {
+        if (closed) break;
+        try { callback(payload); } catch (_) { /* One consumer cannot strand delivery. */ }
+      }
+    }
+    function receiveEvent(raw) {
+      if (closed || documentId === null || typeof raw !== 'string' ||
+          new TextEncoder().encode(raw).length > 65536) return false;
+      try {
+        const envelope = JSON.parse(raw);
+        if (!record(envelope) || envelope.documentId !== documentId ||
+            !listeners.has(envelope.name) || !record(envelope.payload)) return false;
+        deliver(envelope.name, envelope.payload);
+        return true;
+      } catch (_) { return false; }
+    }
     function request(method, params = {}) {
       if (closed || !allowed.has(method) || !record(params) || pending.size >= maxPending)
         return Promise.reject(new Error('Bridge closed, unsupported request, or queue full'));
@@ -28,7 +47,7 @@
         const timer = setTimeout(() => finish(new Error('Native request timed out; no retry performed')), timeoutMs);
         pending.set(id, {timer, finish});
         try {
-          const raw = JSON.stringify({id, method, params});
+          const raw = JSON.stringify({id, method, params, ...(documentId === null ? {} : {documentId})});
           if (new TextEncoder().encode(raw).length > 4096) throw new Error('Native request too large');
           query({request: raw, onSuccess: response => {
             if (!pending.has(id)) return;
@@ -54,10 +73,7 @@
                 throw new Error('Invalid bridge events');
               const value = envelope.result.value;
               finish(null, value);
-              for (const event of notifications) for (const callback of [...listeners.get(event.name)]) {
-                if (closed) break;
-                try { callback(event.payload); } catch (_) { /* One consumer cannot strand replies. */ }
-              }
+              for (const event of notifications) deliver(event.name, event.payload);
             } catch (error) { finish(error); }
           }, onFailure: (code, message) => finish(new Error(
             `Native request rejected (${code}): ${String(message || '').slice(0, 200)}`))});
@@ -75,7 +91,7 @@
       for (const entry of [...pending.values()]) entry.finish(new Error('Bridge disposed'));
       for (const set of listeners.values()) set.clear();
     }
-    return Object.freeze({request, on, dispose});
+    return Object.freeze({request, on, receiveEvent, dispose});
   }
   return Object.freeze({create});
 });
