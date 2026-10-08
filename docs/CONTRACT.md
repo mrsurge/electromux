@@ -2,6 +2,26 @@
 
 Status: internal sample contract, version 1; not a stable SDK API.
 
+## Embedded Node experiment (separate from the retained helper below)
+
+The opt-in Node proof uses a native-created private socket pair, not the Python
+helper's filesystem socket/token/lease server. Native startup selects a compiled
+consumer factory; methods and unsolicited events are declared. Consumer startup
+precedes runtime.ready, failure is retained, mutations are not queued/replayed,
+and disposal fences late results/events. One writer bounds replies/events to 16
+pending frames and five-second completion deadlines. Activity detach retains
+the process-owned engine; private-channel loss disposes its consumer/children.
+
+OwnedService demonstrates a child surviving requests with semantic FD3 readiness,
+explicit stop/status and unsolicited exit state. It stops only its captured
+process group, escalates SIGTERM to SIGKILL and performs no automatic restart.
+Native consumers now select readiness/stop policy, including an explicitly
+cancellable indefinite readiness wait. OutputPump streams bytes with bounded
+queues, retained tails and delivery deadlines, not a lifetime output cap.
+TE2's controller/control protocol is still separate from this sample. This sample
+does not yet replace the helper/TE2 actor or provide Cefrium renderer integration.
+See runtime/README.md and the TE2 Electromux plan for build/device evidence.
+
 Native descriptors may also declare one exact `http://127.0.0.1:<port>` origin
 supplied by their local relay owner. Every authorized document must still match
 an explicit asset route byte-for-byte; queries/fragments, other ports, remote

@@ -5,12 +5,23 @@ import android.content.Intent
 import dev.mrsurge.electromux.node.EmbeddedNodeRuntime
 import dev.mrsurge.electromux.node.ProcessRuntimeSlot
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Process
 
 private object ProofRuntimeProcess {
     private val slot = ProcessRuntimeSlot<EmbeddedNodeRuntime>()
     @Volatile var event = "No event yet"
     fun acquire(context: Context) = slot.acquire {
-        EmbeddedNodeRuntime(context.applicationContext) { event = it }
+        if (BuildConfig.TERMUX_PROOF) {
+            val manager = context.packageManager
+            @Suppress("DEPRECATION")
+            val termux = manager.getApplicationInfo("com.termux", 0)
+            check(termux.uid == Process.myUid()) { "Termux shared UID mismatch" }
+            check(manager.checkSignatures(context.packageName, "com.termux") == PackageManager.SIGNATURE_MATCH) {
+                "Termux signing mismatch"
+            }
+        }
+        EmbeddedNodeRuntime(context.applicationContext, BuildConfig.TERMUX_PROOF) { event = it }
     }
 }
 

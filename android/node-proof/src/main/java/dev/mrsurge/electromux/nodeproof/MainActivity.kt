@@ -35,7 +35,11 @@ class MainActivity : Activity() {
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(status)
-            for ((title, method) in listOf("Ping Node" to "ping", "Filesystem proof" to "file.proof")) {
+            val actions = mutableListOf("Ping Node" to "ping", "Filesystem proof" to "file.proof")
+            if (BuildConfig.TERMUX_PROOF) actions.addAll(listOf(
+                "Termux child / FD3 proof" to "child.proof", "Termux group cancellation" to "child.cancelProof",
+                "Start owned service" to "child.start", "Service status" to "child.status", "Stop owned service" to "child.stop"))
+            for ((title, method) in actions) {
                 addView(Button(this@MainActivity).apply {
                     text = title
                     setOnClickListener {

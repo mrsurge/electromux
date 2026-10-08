@@ -38,14 +38,15 @@ Java_dev_mrsurge_electromux_node_NodeNative_shutdownSocket(JNIEnv*, jobject, jin
 }
 extern "C" JNIEXPORT jint JNICALL
 Java_dev_mrsurge_electromux_node_NodeNative_start(JNIEnv* env, jobject, jstring entry,
-                                                jstring home, jstring temp, jint fd) {
+                                                jstring home, jstring temp, jint fd, jboolean termux) {
     if (started.exchange(true)) { close(fd); return -1; }
     const auto entry_path = utf8(env, entry), home_path = utf8(env, home), temp_path = utf8(env, temp);
     if (setenv("HOME", home_path.c_str(), 1) || setenv("TMPDIR", temp_path.c_str(), 1) ||
         chdir(home_path.c_str())) { close(fd); return -2; }
     // Never authorize options inherited from unrelated host/Termux processes.
     unsetenv("NODE_OPTIONS"); unsetenv("NODE_PATH"); unsetenv("NODE_ICU_DATA");
-    std::vector<std::string> values{"electromux-node", entry_path, std::to_string(fd), home_path};
+    std::vector<std::string> values{"electromux-node", entry_path, std::to_string(fd), home_path,
+        termux ? "termux" : "standalone"};
     size_t size = 0; for (const auto& value : values) size += value.size() + 1;
     std::vector<char> storage(size); std::vector<char*> argv;
     char* at = storage.data();

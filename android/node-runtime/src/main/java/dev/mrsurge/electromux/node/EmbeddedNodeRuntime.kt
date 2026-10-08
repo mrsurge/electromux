@@ -17,11 +17,11 @@ internal object NodeNative {
     init { System.loadLibrary("electromux_node") }
     external fun socketPair(): IntArray?
     external fun shutdownSocket(fd: Int)
-    external fun start(entry: String, home: String, temp: String, fd: Int): Int
+    external fun start(entry: String, home: String, temp: String, fd: Int, termux: Boolean): Int
 }
 
 /** One engine per dedicated Android service process. Never Activity-owned. */
-class EmbeddedNodeRuntime(context: Context, onEvent: (String) -> Unit) : Closeable {
+class EmbeddedNodeRuntime(context: Context, private val termux: Boolean = false, onEvent: (String) -> Unit) : Closeable {
     private val ready = CompletableFuture<Unit>()
     private val sequence = AtomicInteger()
     private val transport: FramedTransport
@@ -53,7 +53,7 @@ class EmbeddedNodeRuntime(context: Context, onEvent: (String) -> Unit) : Closeab
                 val id = frame.opt("id"); check(id is Int)
                 TransportFrame.Reply(id, raw)
             }
-        }, setOf("runtime.ready", "sample.updated"), { frame ->
+        }, setOf("runtime.ready", "sample.updated", "child.state", "child.output"), { frame ->
             if (frame.name == "runtime.ready") {
                 val data = JSONObject(frame.raw).getJSONObject("data")
                 check(data.getInt("version") == 1 && data.getString("node").startsWith("v24."))
@@ -62,14 +62,15 @@ class EmbeddedNodeRuntime(context: Context, onEvent: (String) -> Unit) : Closeab
         })
         Thread({
             try {
-                val code = NodeNative.start(entry.absolutePath, root.absolutePath, context.cacheDir.absolutePath, pair[1])
+                val code = NodeNative.start(entry.absolutePath, root.absolutePath, context.cacheDir.absolutePath, pair[1], termux)
                 ready.completeExceptionally(IllegalStateException("Node exited ($code); process restart required"))
             } catch (error: Exception) { ready.completeExceptionally(error) }
             finally { transport.close() }
         }, "electromux-node-engine").start()
     }
     fun request(method: String): String {
-        require(method == "ping" || method == "file.proof")
+        require(method == "ping" || method == "file.proof" ||
+            (termux && method in setOf("child.proof", "child.cancelProof", "child.start", "child.status", "child.stop")))
         ready.get(8, TimeUnit.SECONDS)
         val id = sequence.incrementAndGet()
         check(id > 0)

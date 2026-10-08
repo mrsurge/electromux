@@ -7,6 +7,22 @@ Termux Python/Node is needed by this proof. This is not an Electron API-complete
 
 ## Build
 
+The proof now uses a reusable `ConsumerHost` with retained initialization,
+declared methods, nonqueued dispatch and idempotent disposal. Its compiled
+factory selects standalone/Termux policy from native startup, not renderer input.
+`OwnedChildSupervisor` aborts and joins one owned operation on channel loss.
+Activity detach retains the process-owned engine. The diagnostic wire schema,
+fixed child commands and readiness token remain sample policy, not public SDK
+contracts. `OwnedService` now proves long-lived readiness/status/stop and
+unsolicited exit events. Readiness/stop limits are native consumer-selected
+(defaults: 3s/250ms; the Termux sample selects indefinite cancellable readiness
+and 1s stop grace). Raw output is streamed through OutputPump, bounded to 16
+queued chunks of at most 64KiB, 5s delivery deadlines and 2KiB tails per lane;
+there is no lifetime-output cap. Consumer events are declared and closed-owner fenced.
+`FrameWriter` serializes at most 16 pending frames with a 5s write deadline;
+overflow terminates the channel, with no replay. TE2 actor migration and
+consumer-specific production protocol/streaming integration are still pending.
+
 From this directory, with development Node 24+ and npm installed:
 
 ```sh
@@ -71,3 +87,38 @@ This does not establish automatic crash recovery or background survival.
 
 The proof uses ordinary debug signing, not the Termux shared-UID distribution lane.
 Its native diagnostic buttons intentionally precede browser integration.
+
+## Separate Termux execution proof
+
+The opt-in `:node-termux-proof` application reuses the diagnostic source, keeping
+`dev.mrsurge.electromux.nodeproof.termux` separate from the ordinary proof and TE2.
+Its root manifest joins `com.termux`; assembly requires explicit matching signing
+environment, and native startup independently checks the installed UID/signature.
+Do not change the ordinary proof's UID or uninstall Termux to resolve a mismatch.
+
+From `../android`, with the same SDK/NDK configuration and the four
+`ELECTROMUX_KEYSTORE`, `ELECTROMUX_STORE_PASSWORD`, `ELECTROMUX_KEY_ALIAS`,
+`ELECTROMUX_KEY_PASSWORD` environment values supplied outside source:
+
+```sh
+./gradlew -PelectromuxEmbeddedNodeProof=true -PelectromuxTermuxProof=true \
+  :node-runtime:testDebugUnitTest :node-proof:testDebugUnitTest \
+  :node-termux-proof:testDebugUnitTest :node-termux-proof:assembleDebug
+```
+
+The Termux-only buttons enable fixed `child.proof`/`child.cancelProof` methods,
+authorized through a native startup declaration. They do not accept paths, argv
+or environment from a page. Embedded Node directly spawns absolute Termux Bash,
+with explicit HOME/PREFIX/TMPDIR/PATH/TERM and Termux exec preload, separate
+stdout/stderr plus an inherited FD3 readiness pipe. No external Node, Python
+helper, TermuxService broker, framework launch or user configuration mutation.
+Output is capped at 8 KiB per lane, operation deadline is 3 seconds, process
+groups are owned and cancellation is readiness-triggered. Errors do not retry.
+
+Razr Android API 36 acceptance: matching public GitHub-Termux signer, shared UID
+10517, target 34 and observed `untrusted_app_27` domain. Child UID/environment,
+deliberate exit 7, separate stderr, exact child PID/FD3 readiness and SIGTERM
+group cancellation all pass. Both shell and sleep descendant were absent afterward.
+This does not promise other Android/signing-family compatibility or a full
+Electron child_process API. The existing TermuxService adapter is not silently
+used as a fallback. Native input/output framing remains independent from TE2.

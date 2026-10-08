@@ -20,4 +20,8 @@ include(":host")
 // Opt-in proof only: accepted host/TE2 consumers keep their current runtime.
 if (providers.gradleProperty("electromuxEmbeddedNodeProof").orNull == "true") {
     include(":node-runtime", ":node-proof")
+    if (providers.gradleProperty("electromuxTermuxProof").orNull == "true") {
+        include(":node-termux-proof")
+        project(":node-termux-proof").buildFileName = "../node-proof/build.gradle.kts"
+    }
 }
