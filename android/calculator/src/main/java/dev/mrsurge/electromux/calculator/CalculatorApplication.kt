@@ -1,0 +1,13 @@
+package dev.mrsurge.electromux.calculator
+
+import android.app.Application
+import android.content.Context
+import org.chromium.base.CommandLine
+
+class CalculatorApplication : Application() {
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(base)
+        if (!CommandLine.isInitialized()) CommandLine.init(null)
+        CommandLine.getInstance().appendSwitchWithValue("javaless-renderers", "disabled")
+    }
+}

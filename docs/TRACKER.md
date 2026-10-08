@@ -1,5 +1,30 @@
 # Electromux independent sample tracker
 
+## Electron calculator compatibility foundation (2026-10-08)
+
+- [x] Strict presentation-only compatibility manifest; main-window-only policy.
+- [x] Ordered main-window effects, close cancellation and retained native errors.
+- [x] Node-owned menu callbacks, revision IDs, explicit disabled reasons/roles.
+- [x] Strict TypeScript and all 40 runtime tests, including the actual-source probe, pass.
+- [ ] Installed Electron/preload bridge and real native rendering acceptance.
+- [x] Additive scoped main-module loading and metadata-only original preload execution.
+- [x] Actual pinned calculator main/preload probe passes without source edits;
+  dependency adaptations/deferred context menu are explicit in the consumer manifest.
+- [x] TE2 consumer regression suite: all 31 tests pass; no accepted transport API changed.
+- [x] Native full-duplex effect acknowledgements and packaged early preload binding.
+- [x] Separate ordinary-UID calculator APK source with native menu chrome and Cefrium.
+- [x] Build/JVM comparison and unchanged TE2 consumer regressions pass.
+- [ ] Installed arithmetic/menu/lifecycle acceptance and source-edit inventory.
+- [x] Razr installed renderer/arithmetic smoke: packaged loopback assets render;
+  actual touch input `2 + 3 =` displays `5`. Broader acceptance remains pending.
+- [ ] Fix retained renderer subscription on UI relaunch/configuration recreation.
+  Current Razr crash: `Electron renderer owner already attached` in subscribe;
+  scaling's causal role is unproven. Preserve this as a known POC limitation.
+
+See [calculator proof plan](ELECTRON_CALCULATOR_POC.md). The standalone debug APK
+is built and installed on Razr. No publication, commit or complete
+drop-in compatibility claim in this slice.
+
 Current integration direction: [Desktop-language POC](DESKTOP_PARITY_POC.md).
 Build a working TE2 Termux consumer using portable Desktop code and Android
 adapters, then extract/stabilize reusable hosting, branding and custom-route APIs.

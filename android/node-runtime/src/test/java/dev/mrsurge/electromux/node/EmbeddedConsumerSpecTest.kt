@@ -20,4 +20,13 @@ class EmbeddedConsumerSpecTest {
         try { EmbeddedConsumerSpec("embedded_node/main.mjs", setOf("ping"), setOf("runtime.ready")); fail() }
         catch (_: IllegalArgumentException) {}
     }
+    @Test fun resourcesAreCopiedAndConfined() {
+        val resources = mutableSetOf("electron_app/app.js")
+        val spec = EmbeddedConsumerSpec("embedded_node/main.mjs", setOf("ping"), emptySet(), resources)
+        resources.clear(); assertEquals(setOf("electron_app/app.js"), spec.resources)
+        for (path in listOf("../app.js", "electron_app/../app.js", "electron_app//app.js", "/electron_app/app.js")) {
+            try { EmbeddedConsumerSpec("embedded_node/main.mjs", setOf("ping"), emptySet(), setOf(path)); fail(path) }
+            catch (_: IllegalArgumentException) {}
+        }
+    }
 }

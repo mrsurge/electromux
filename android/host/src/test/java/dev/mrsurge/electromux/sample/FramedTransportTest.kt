@@ -43,6 +43,16 @@ class FramedTransportTest {
             assertEquals("reply:2", second.get(2, TimeUnit.SECONDS))
         }
     }
+    @Test fun oneWayControlDoesNotWaitBehindPendingRequest() {
+        Harness().use { h ->
+            val reply = h.request()
+            assertEquals("request:1", h.receive())
+            h.transport.sendControl("ack:7")
+            assertEquals("ack:7", h.receive())
+            h.send("reply:1")
+            assertEquals("reply:1", reply.get(2, TimeUnit.SECONDS))
+        }
+    }
 
     @Test fun idleDoesNotTimeoutButPartialFrameDoes() {
         Harness(timeout = 80).use { h ->

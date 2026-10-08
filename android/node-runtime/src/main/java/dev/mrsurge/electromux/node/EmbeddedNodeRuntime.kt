@@ -31,6 +31,25 @@ class EmbeddedNodeRuntime(context: Context, private val termux: Boolean = false,
             check(isDirectory || mkdirs())
         }
         val entry = File(root, "main.mjs")
+        var resourceBytes = 0L
+        for (asset in consumer.resources) {
+            val destination = File(root, asset)
+            check(destination.canonicalPath.startsWith(root.canonicalPath + File.separator))
+            val parent = checkNotNull(destination.parentFile)
+            check(parent.isDirectory || parent.mkdirs())
+            val staging = File.createTempFile("resource-", ".tmp", parent)
+            try {
+                context.assets.open(asset).use { input -> staging.outputStream().use { output ->
+                    val buffer = ByteArray(8192)
+                    while (true) {
+                        val count = input.read(buffer); if (count < 0) break
+                        resourceBytes += count; check(resourceBytes <= 64L * 1024 * 1024) { "Resource byte limit" }
+                        output.write(buffer, 0, count)
+                    }
+                } }
+                check(staging.renameTo(destination))
+            } finally { staging.delete() }
+        }
         val temporary = File.createTempFile("runtime-", ".mjs", root)
         try {
             context.assets.open(consumer.entryAsset).use { input ->
@@ -77,6 +96,14 @@ class EmbeddedNodeRuntime(context: Context, private val termux: Boolean = false,
         val frame = JSONObject().put("id", id).put("method", method)
         if (params != null) frame.put("params", JSONObject(params.toString()))
         return transport.request(id, frame.toString())
+    }
+    /** Electron's opt-in ACK lane must not wait behind the request it completes. */
+    fun acknowledgeEffect(id: Int, error: String? = null) {
+        check("electron.effect" in consumer.events) { "Consumer does not declare Electron effects" }
+        require(id > 0 && (error == null || error.length in 1..512))
+        val frame = JSONObject().put("ack", id)
+        if (error != null) frame.put("error", error)
+        transport.sendControl(frame.toString())
     }
     override fun close() { transport.close() }
 }

@@ -53,7 +53,7 @@ abstract class EmbeddedNodeService : Service() {
                     "Embedded Node must run in a dedicated service process"
                 }
                 validateEnvironment()
-                val key = listOf(consumer.entryAsset, consumer.methods, consumer.events, termuxLane)
+                val key = listOf(consumer.entryAsset, consumer.methods, consumer.events, consumer.resources, termuxLane)
                 synchronized(runtime) {
                     check(declaration == null || declaration == key) { "Node consumer cannot be retargeted" }
                     declaration = key
