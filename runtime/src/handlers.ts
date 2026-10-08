@@ -14,6 +14,7 @@ export async function handle(request: Request, root: string, termux = false, sig
     pid: process.pid, platform: process.platform, arch: process.arch,
     tmpdir: process.env['TMPDIR'] || '', cwd: process.cwd()
   }};
+  if (request.method !== 'file.proof') throw new Error('Unknown proof method');
   const path = join(root, 'filesystem-proof.txt');
   await writeFile(path, 'Electromux embedded Node filesystem proof\n', {mode: 0o600});
   return {id: request.id, result: {content: await readFile(path, 'utf8')}};

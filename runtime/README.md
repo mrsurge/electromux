@@ -7,6 +7,16 @@ Termux Python/Node is needed by this proof. This is not an Electron API-complete
 
 ## Build
 
+Reusable private-FD hosting lives in src/runtime-host.ts; an application's
+compiled entry supplies its consumer factory. The proof main.ts owns sample
+policy. Generic requests carry optional object params, copied/validated with
+byte/depth/node bounds. Dispatch permission belongs to the consumer allowlist,
+not a hard-coded proof-method parser. Android's EmbeddedConsumerSpec chooses an
+exact APK asset entry and immutable method/event declarations; page requests
+cannot select files/modules. Process-owned engines must retain their original
+consumer selection for their lifetime. TE2's embedded entry is a separate
+consumer build; active Android TE2 migration is not yet implemented.
+
 The proof now uses a reusable `ConsumerHost` with retained initialization,
 declared methods, nonqueued dispatch and idempotent disposal. Its compiled
 factory selects standalone/Termux policy from native startup, not renderer input.

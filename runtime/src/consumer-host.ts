@@ -1,7 +1,7 @@
 export type Consumer = {
   methods: readonly string[];
   events?: readonly string[];
-  dispatch(method: string): Promise<Record<string, unknown>>;
+  dispatch(method: string, params?: Parameters): Promise<Record<string, unknown>>;
   dispose(): Promise<void>;
 };
 export type Emit = (name: string, data: Record<string, unknown>) => Promise<void>;
@@ -25,15 +25,17 @@ export class ConsumerHost {
     if (!this.initialized.events?.includes(name)) throw new Error('Undeclared consumer event');
     await this.sink(name, data);
   };
+  publish(name: string, data: Record<string, unknown>): Promise<void> { return this.emit(name, data); }
   async ready(): Promise<void> { await this.consumer; if (this.closed) throw new Error('Consumer closed'); }
-  async dispatch(method: string): Promise<Record<string, unknown>> {
+  async dispatch(method: string, params?: Parameters): Promise<Record<string, unknown>> {
     if (this.closed || this.busy) throw new Error('Consumer unavailable');
     this.busy = true;
     try {
+      const dto = params === undefined ? undefined : parameters(params);
       const consumer = await this.consumer;
       if (this.closed) throw new Error('Consumer closed');
       if (!consumer.methods.includes(method)) throw new Error('Undeclared consumer method');
-      const result = await consumer.dispatch(method);
+      const result = await consumer.dispatch(method, dto);
       if (this.closed) throw new Error('Consumer closed');
       return result;
     } finally { this.busy = false; }
@@ -44,3 +46,4 @@ export class ConsumerHost {
     return this.disposal ||= this.consumer.then(consumer => consumer.dispose(), () => {});
   }
 }
+import {parameters, type Parameters} from './protocol.js';

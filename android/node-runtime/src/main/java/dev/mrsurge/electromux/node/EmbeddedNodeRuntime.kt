@@ -21,7 +21,8 @@ internal object NodeNative {
 }
 
 /** One engine per dedicated Android service process. Never Activity-owned. */
-class EmbeddedNodeRuntime(context: Context, private val termux: Boolean = false, onEvent: (String) -> Unit) : Closeable {
+class EmbeddedNodeRuntime(context: Context, private val termux: Boolean = false,
+    private val consumer: EmbeddedConsumerSpec = EmbeddedConsumerSpec.proof(termux), onEvent: (String) -> Unit) : Closeable {
     private val ready = CompletableFuture<Unit>()
     private val sequence = AtomicInteger()
     private val transport: FramedTransport
@@ -32,7 +33,7 @@ class EmbeddedNodeRuntime(context: Context, private val termux: Boolean = false,
         val entry = File(root, "main.mjs")
         val temporary = File.createTempFile("runtime-", ".mjs", root)
         try {
-            context.assets.open("embedded_node/main.mjs").use { input ->
+            context.assets.open(consumer.entryAsset).use { input ->
                 temporary.outputStream().use { output -> input.copyTo(output) }
             }
             check(temporary.renameTo(entry))
@@ -53,7 +54,7 @@ class EmbeddedNodeRuntime(context: Context, private val termux: Boolean = false,
                 val id = frame.opt("id"); check(id is Int)
                 TransportFrame.Reply(id, raw)
             }
-        }, setOf("runtime.ready", "sample.updated", "child.state", "child.output"), { frame ->
+        }, consumer.events + "runtime.ready", { frame ->
             if (frame.name == "runtime.ready") {
                 val data = JSONObject(frame.raw).getJSONObject("data")
                 check(data.getInt("version") == 1 && data.getString("node").startsWith("v24."))
@@ -68,13 +69,14 @@ class EmbeddedNodeRuntime(context: Context, private val termux: Boolean = false,
             finally { transport.close() }
         }, "electromux-node-engine").start()
     }
-    fun request(method: String): String {
-        require(method == "ping" || method == "file.proof" ||
-            (termux && method in setOf("child.proof", "child.cancelProof", "child.start", "child.status", "child.stop")))
+    fun request(method: String, params: JSONObject? = null): String {
+        require(method in consumer.methods)
         ready.get(8, TimeUnit.SECONDS)
         val id = sequence.incrementAndGet()
         check(id > 0)
-        return transport.request(id, JSONObject().put("id", id).put("method", method).toString())
+        val frame = JSONObject().put("id", id).put("method", method)
+        if (params != null) frame.put("params", JSONObject(params.toString()))
+        return transport.request(id, frame.toString())
     }
     override fun close() { transport.close() }
 }
