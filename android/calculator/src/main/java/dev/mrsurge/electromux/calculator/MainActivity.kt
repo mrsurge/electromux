@@ -31,6 +31,8 @@ class MainActivity : Activity() {
     private var destroyed = false
     private var created = false
     private var loadingEffect: Int? = null
+    private var handoffAttempted = false
+    private var cancelHandoff: (() -> Unit)? = null
     private val commands = ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS, ArrayBlockingQueue(4))
     private val acknowledgements = ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS, ArrayBlockingQueue(16))
     private val observer = object : INodeEvents.Stub() {
@@ -46,11 +48,45 @@ class MainActivity : Activity() {
             }
         }
     }
-    private val connection = object : ServiceConnection {
+    private val connection: ServiceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
             host = IElectronHost.Stub.asInterface(binder)
-            host!!.subscribe(observer)
-            command("electron.start", JSONObject())
+            try {
+                host!!.subscribe(observer)
+                command("electron.start", JSONObject())
+            } catch (failure: Exception) {
+                host = null
+                status.text = failure.message ?: "Could not attach Electron runtime"
+                status.visibility = android.view.View.VISIBLE
+                if (!handoffAttempted && failure.message == "Electron renderer owner already attached") {
+                    handoffAttempted = true
+                    val handler = android.os.Handler(mainLooper)
+                    var settled = false
+                    lateinit var death: IBinder.DeathRecipient
+                    val timeout = Runnable {
+                        if (!settled) {
+                            settled = true; cancelHandoff = null
+                            try { binder.unlinkToDeath(death, 0) } catch (_: Exception) { }
+                            status.text = "Previous Electron runtime did not exit; close and reopen the app"
+                        }
+                    }
+                    death = IBinder.DeathRecipient { handler.post {
+                        if (!settled && !destroyed) {
+                            settled = true; cancelHandoff = null; handler.removeCallbacks(timeout)
+                            bindRuntime()
+                        }
+                    } }
+                    cancelHandoff = {
+                        settled = true; handler.removeCallbacks(timeout)
+                        try { binder.unlinkToDeath(death, 0) } catch (_: Exception) { }
+                    }
+                    status.text = "Waiting for previous Electron runtime to exit"
+                    handler.postDelayed(timeout, 5000)
+                    try { binder.linkToDeath(death, 0) }
+                    catch (_: android.os.RemoteException) { death.binderDied() }
+                }
+                if (bound) { unbindService(connection); bound = false }
+            }
         }
         override fun onServiceDisconnected(name: ComponentName) {
             host = null; status.text = "Node service disconnected; restart the app. No action replayed."
@@ -103,8 +139,13 @@ class MainActivity : Activity() {
             addView(browser.surfaceContainer, LinearLayout.LayoutParams(-1, 0, 1f))
         }
         setContentView(layout)
-        val intent = Intent(this, CalculatorService::class.java)
-        startService(intent); bound = bindService(intent, connection, BIND_AUTO_CREATE)
+        // This proof's main window owns the bound runtime lifetime. A started
+        // service otherwise survives UI death and retains an obsolete renderer.
+        bindRuntime()
+    }
+    private fun bindRuntime() {
+        if (destroyed) return
+        bound = bindService(Intent(this, CalculatorService::class.java), connection, BIND_AUTO_CREATE)
         if (!bound) status.text = "Could not bind private Electron runtime"
     }
     private fun command(method: String, params: JSONObject) {
@@ -173,6 +214,7 @@ class MainActivity : Activity() {
     }
     override fun onDestroy() {
         destroyed = true
+        cancelHandoff?.invoke(); cancelHandoff = null
         val target = host; host = null
         Thread { try { target?.close() } catch (_: Exception) { } }.start()
         commands.shutdownNow(); acknowledgements.shutdownNow()

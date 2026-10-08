@@ -17,9 +17,12 @@
 - [ ] Installed arithmetic/menu/lifecycle acceptance and source-edit inventory.
 - [x] Razr installed renderer/arithmetic smoke: packaged loopback assets render;
   actual touch input `2 + 3 =` displays `5`. Broader acceptance remains pending.
-- [ ] Fix retained renderer subscription on UI relaunch/configuration recreation.
+- [x] Fix retained renderer subscription on UI relaunch/configuration recreation.
   Current Razr crash: `Electron renderer owner already attached` in subscribe;
   scaling's causal role is unproven. Preserve this as a known POC limitation.
+- [x] Follow-up Razr device tests: UI process death cleans Node, fresh reopen,
+  rapid Back/reopen handoff, density `356 -> 380 -> 356` and reopen; arithmetic
+  remains `2 + 3 = 5`. User acceptance of the follow-up remains pending.
 
 See [calculator proof plan](ELECTRON_CALCULATOR_POC.md). The standalone debug APK
 is built and installed on Razr. No publication, commit or complete

@@ -125,6 +125,16 @@ Electron API compatibility.
 
 ### Node entrypoint checkpoint (2026-10-08)
 
+Lifecycle follow-up: the calculator's Node service is bound-only, with same-UID
+renderer Binder death and final-unbind cleanup. Subscription failures cannot
+escape the Activity callback. A stale-owner rejection before any start command
+allows one fresh binding only after the old service Binder dies (5-second bound);
+this never replays an application command. Density/font/size configuration changes
+retain the Activity. Installed Razr tests cover UI-only SIGKILL, fresh reopen,
+rapid Back/reopen, density `356 -> 380 -> 356` (restored user override) and another
+reopen with successful arithmetic. No calculator FATAL entries appeared after
+10:00 in this test window. User acceptance of the follow-up is pending.
+
 The additive `electron-main.ts` facade now supplies explicit app readiness,
 metadata, main-window/menu objects, navigation effects, theme and quit effects.
 `electron-loader.ts` scopes CommonJS overrides to one trusted app graph; it does

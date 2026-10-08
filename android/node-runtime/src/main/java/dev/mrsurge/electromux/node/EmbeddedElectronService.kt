@@ -14,12 +14,21 @@ abstract class EmbeddedElectronService : Service() {
     private val lane = ReentrantLock()
     private var runtime: EmbeddedNodeRuntime? = null
     private var observer: INodeEvents? = null
+    private var ownerBinder: IBinder? = null
+    private val ownerDeath: IBinder.DeathRecipient = IBinder.DeathRecipient {
+        shutdown(); stopSelf()
+    }
     private var closed = false
     private fun authorize() { check(Binder.getCallingUid() == Process.myUid()) { "Private Electron caller rejected" } }
     private val binder = object : IElectronHost.Stub() {
         override fun subscribe(value: INodeEvents) {
             authorize(); synchronized(this@EmbeddedElectronService) {
-                check(!closed && observer == null) { "Electron renderer owner already attached" }; observer = value
+                check(!closed && observer == null) { "Electron renderer owner already attached" }
+                val token = value.asBinder()
+                // The UI process can disappear without Activity.onDestroy. Do
+                // not leave its callback retained by a started Node service.
+                token.linkToDeath(ownerDeath, 0)
+                ownerBinder = token; observer = value
             }
         }
         override fun request(method: String, parameters: String): String {
@@ -50,10 +59,19 @@ abstract class EmbeddedElectronService : Service() {
             authorize(); shutdown(); stopSelf()
         }
     }
-    private fun shutdown() = synchronized(this) {
-        if (!closed) { closed = true; observer = null; runtime?.close(); runtime = null }
+    private fun shutdown(): Unit = synchronized(this) {
+        if (!closed) {
+            closed = true; observer = null
+            ownerBinder?.let { try { it.unlinkToDeath(ownerDeath, 0) } catch (_: Exception) { } }
+            ownerBinder = null
+            runtime?.close(); runtime = null
+        }
     }
     override fun onBind(intent: Intent): IBinder = binder
+    override fun onUnbind(intent: Intent): Boolean {
+        shutdown(); stopSelf()
+        return false
+    }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int) = START_NOT_STICKY
     override fun onDestroy() {
         shutdown(); super.onDestroy()

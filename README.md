@@ -9,10 +9,11 @@ Calculator main/preload without source edits, with native menu callbacks and
 packaged loopback renderer assets. Installed Razr arithmetic (`2 + 3 = 5`) is
 verified. This is a useful-subset POC, not complete Electron compatibility.
 
-Known blocker: UI relaunch/configuration recreation can encounter a retained
-renderer subscription in the dedicated Node service and crash with
-`Electron renderer owner already attached`. Lifecycle recovery is pending;
-do not treat the current sample as a production SDK.
+The initial public checkpoint exposed a retained renderer subscription on UI
+relaunch. The lifecycle follow-up uses bound ownership, Binder-death/final-unbind
+cleanup and a single death-gated handoff before application startup. Razr UI-death,
+rapid reopen and density-change recovery tests pass. This remains a POC, not a
+production SDK; user acceptance and broader lifecycle coverage are separate.
 
 The older helper scaffold below remains for historical/Termux-specific tests;
 it is not the embedded JavaScript runtime used by the calculator or TE2 Termux.
