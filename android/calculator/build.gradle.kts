@@ -11,6 +11,16 @@ android {
         ndk { abiFilters += "arm64-v8a" }
     }
     packaging { jniLibs { useLegacyPackaging = true } }
+    buildTypes {
+        create("staging") {
+            isDebuggable = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+    }
     sourceSets.getByName("main").assets.srcDir("../../samples/electron-calculator/build/assets")
 }
 tasks.named("preBuild") { doFirst {

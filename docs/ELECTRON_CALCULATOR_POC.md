@@ -86,6 +86,30 @@ node samples/electron-calculator/verify-apk.mjs android/calculator/build/outputs
 Use the existing JDK 25/SDK 37, ELECTROMUX_NODE_SDK and ELECTROMUX_NDK_HOME setup.
 APK: `android/calculator/build/outputs/apk/debug/calculator-debug.apk`.
 Do not install over TE2: app ID is `dev.mrsurge.electromux.calculator`.
+
+For the size/runtime validation lane, use
+`./gradlew -PelectromuxCalculator=true :calculator:assembleStaging` from
+`android/`, then run the same APK verifier against
+`android/calculator/build/outputs/apk/staging/calculator-staging.apk`.
+The initial Chromium R8 pass exceeded the sample's default 2 GB Java heap;
+the successful local retry supplied
+`'-Dorg.gradle.jvmargs=-Xmx6g -Dfile.encoding=UTF-8'` on the command line.
+This is a build-resource requirement, not a shipped runtime setting.
+Staging is non-debuggable, uses the existing local debug signer for in-place
+updates, enables R8 with the optimized defaults, and shrinks resources.
+Node/Chromium and application version remain unchanged. Retain the R8 mapping,
+configuration and removal reports. Assembly success alone does not establish
+JNI, menu callback, renderer or lifecycle compatibility on a device.
+
+Measured 2026-10-08 staging APK: 184,420,778 bytes (175.88 MiB), versus
+224.52 MiB debug. DEX dropped from 79.94 to 43.95 MiB; packed native libraries
+are 112.98 MiB and ZIP overhead is 0.52 MiB. All 66 declared domain resources
+and renderer/runtime entrypoints pass the APK verifier. SHA-256:
+`40da8f9f2b4d8d19f4cf05ef7892a207d48d0a4b99b38ffa45785517c89e437c`.
+Retain the generated staging mapping/configuration/usage reports. R8 warns
+about Cefrium's final generated resource IDs with optimized resource shrinking
+and optional Chrome class-name resolution; installed behavior must be validated
+before declaring the staging lane accepted.
 Native implementation/build does not establish live arithmetic/preload/menu
 acceptance. Tests include ACK-with-pending-command, negative/stale/duplicate ACK,
 deadline/disconnect, one-way native control and resource containment. TE2's 31
