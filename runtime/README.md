@@ -15,7 +15,31 @@ not a hard-coded proof-method parser. Android's EmbeddedConsumerSpec chooses an
 exact APK asset entry and immutable method/event declarations; page requests
 cannot select files/modules. Process-owned engines must retain their original
 consumer selection for their lifetime. TE2's embedded entry is a separate
-consumer build; active Android TE2 migration is not yet implemented.
+consumer build; TE2 Termux now wires that entry into its isolated service (device
+acceptance pending, rather than an accepted-runtime replacement).
+
+### Android consumer service boundary
+
+`EmbeddedNodeService` / `EmbeddedNodeClient` provide reusable AIDL request/event
+transport. Consumers declare a non-exported service in a dedicated process and
+an immutable `EmbeddedConsumerSpec`; Intents cannot select entries or arguments.
+Every Binder method checks the caller UID. Shared-UID siblings are the same trust
+domain, not sandboxed from each other. TE2 additionally validates installed
+Termux UID/signature before initializing its consumer.
+
+One process-owned engine/failure and declaration are retained across detach and
+Service recreation. Explicit requests initialize it; page close only unregisters
+and unbinds. Process death fails the client and requires explicit recovery; no
+mutation replay or engine restart is attempted by the client. Request payloads
+are limited to 64KiB, one in-flight request, at most 16 observers, plus the
+existing bounded private-FD writer/read deadlines. Call from a background lane,
+never Android's main thread. A started non-sticky service retains the engine
+independently of temporary page bindings; this is not an Android survival guarantee.
+
+The runtime library depends on the existing host transport library instead of
+copying its classes. The TE2 build supplies `embedded_node/te2.mjs`; diagnostic
+builds still supply the standalone proof entry. Neither generic service nor
+client imports TE2 or chooses its framework policy.
 
 The proof now uses a reusable `ConsumerHost` with retained initialization,
 declared methods, nonqueued dispatch and idempotent disposal. Its compiled
