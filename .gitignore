@@ -7,3 +7,6 @@ local.properties
 *.keystore
 *.jks
 *.apk
+node_modules/
+**/.cxx/
+runtime/dist/
