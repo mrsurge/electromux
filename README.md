@@ -1,5 +1,23 @@
 # Electromux
 
+## Embedded Node / Electron-shaped proof of concept
+
+The current development branch adds embedded Node 24 and a typed, additive
+Electron-shaped main-process facade. The independent
+[calculator proof](docs/ELECTRON_CALCULATOR_POC.md) executes the pinned Electron
+Calculator main/preload without source edits, with native menu callbacks and
+packaged loopback renderer assets. Installed Razr arithmetic (`2 + 3 = 5`) is
+verified. This is a useful-subset POC, not complete Electron compatibility.
+
+The initial public checkpoint exposed a retained renderer subscription on UI
+relaunch. The lifecycle follow-up uses bound ownership, Binder-death/final-unbind
+cleanup and a single death-gated handoff before application startup. Razr UI-death,
+rapid reopen and density-change recovery tests pass. This remains a POC, not a
+production SDK; user acceptance and broader lifecycle coverage are separate.
+
+The older helper scaffold below remains for historical/Termux-specific tests;
+it is not the embedded JavaScript runtime used by the calculator or TE2 Termux.
+
 Experimental framework-agnostic Android application host: Cefrium renders a
 consumer's bundled frontend; a Termux helper connects it to an owned backend.
 This is an initial scaffold, not a shipping SDK or a replacement for Cefrium.

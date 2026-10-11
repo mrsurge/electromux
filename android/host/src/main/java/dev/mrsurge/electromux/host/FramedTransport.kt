@@ -27,6 +27,7 @@ class FramedTransport(
     private val allowedEvents = eventNames.toSet()
     private val gate = Any()
     private val requestLane = Any()
+    private val writeLane = Any()
     private val timer = Executors.newSingleThreadScheduledExecutor()
     private val events = ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS, ArrayBlockingQueue(16))
     private var pending: Pair<Int, CompletableFuture<String>>? = null
@@ -49,7 +50,7 @@ class FramedTransport(
         val deadline = timer.schedule({ fail(IllegalStateException("Helper request deadline exceeded")) },
             timeoutMillis, TimeUnit.MILLISECONDS)
         try {
-            FrameCodec.write(output, raw)
+            synchronized(writeLane) { FrameCodec.write(output, raw) }
             reply.get(timeoutMillis, TimeUnit.MILLISECONDS)
         } catch (error: Exception) {
             fail(error)
@@ -58,6 +59,19 @@ class FramedTransport(
             deadline.cancel(false)
             synchronized(gate) { if (pending?.second === reply) pending = null }
         }
+    }
+
+    /** Opt-in full-duplex control frame: no reply waiter and no request-lane lock.
+     * Call only with a peer protocol that explicitly declares one-way controls.
+     * Existing helper/TE2 requests keep their serial correlation semantics.
+     */
+    fun sendControl(raw: String) {
+        synchronized(gate) { check(!closed) { "Helper transport closed" } }
+        val deadline = timer.schedule({ fail(IllegalStateException("Control write deadline exceeded")) },
+            timeoutMillis, TimeUnit.MILLISECONDS)
+        try { synchronized(writeLane) { FrameCodec.write(output, raw) } }
+        catch (error: Exception) { fail(error); throw error }
+        finally { deadline.cancel(false) }
     }
 
     private fun readLoop() {

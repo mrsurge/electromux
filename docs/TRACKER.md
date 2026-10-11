@@ -1,5 +1,40 @@
 # Electromux independent sample tracker
 
+Acceptance reconciliation (2026-10-08): later proofs close earlier source-only
+gates where explicitly recorded. Historical narratives retain their original
+scope. Pixel helper and Razr embedded proofs are distinct lanes, not blanket
+both-device parity. Calculator staging and broader stress/rollback gates remain open.
+
+## Electron calculator compatibility foundation (2026-10-08)
+
+- [x] Strict presentation-only compatibility manifest; main-window-only policy.
+- [x] Ordered main-window effects, close cancellation and retained native errors.
+- [x] Node-owned menu callbacks, revision IDs, explicit disabled reasons/roles.
+- [x] Strict TypeScript and all 40 runtime tests, including the actual-source probe, pass.
+- [x] Installed Electron/preload bridge and real native rendering acceptance.
+- [x] Additive scoped main-module loading and metadata-only original preload execution.
+- [x] Actual pinned calculator main/preload probe passes without source edits;
+  dependency adaptations/deferred context menu are explicit in the consumer manifest.
+- [x] TE2 consumer regression suite: all 31 tests pass; no accepted transport API changed.
+- [x] Native full-duplex effect acknowledgements and packaged early preload binding.
+- [x] Separate ordinary-UID calculator APK source with native menu chrome and Cefrium.
+- [x] Build/JVM comparison and unchanged TE2 consumer regressions pass.
+- [x] Installed debug arithmetic/menu acceptance, unchanged main/preload inventory and recorded lifecycle smoke tests.
+- [ ] Complete user acceptance of the lifecycle follow-up and staging calculator.
+- [x] Razr installed renderer/arithmetic smoke: packaged loopback assets render;
+  actual touch input `2 + 3 =` displays `5`. Broader acceptance remains pending.
+- [x] Fix retained renderer subscription on UI relaunch/configuration recreation.
+  Reproduced Razr crash was `Electron renderer owner already attached` in subscribe;
+  the bound-service/Binder-owner follow-up below fixes the reproduced relaunch case.
+  Scaling's causal role remains unproven; broader crash recovery is not claimed.
+- [x] Follow-up Razr device tests: UI process death cleans Node, fresh reopen,
+  rapid Back/reopen handoff, density `356 -> 380 -> 356` and reopen; arithmetic
+  remains `2 + 3 = 5`. User acceptance of the follow-up remains pending.
+
+See [calculator proof plan](ELECTRON_CALCULATOR_POC.md). The standalone debug APK
+is built and installed on Razr. Source is now public; the calculator APK is
+unpublished, staging acceptance is deferred, and complete drop-in compatibility is not claimed.
+
 Current integration direction: [Desktop-language POC](DESKTOP_PARITY_POC.md).
 Build a working TE2 Termux consumer using portable Desktop code and Android
 adapters, then extract/stabilize reusable hosting, branding and custom-route APIs.
@@ -9,39 +44,44 @@ the first bridge slice was separately approved with targeted local validation.
 - [x] Inventory Desktop request/events and portable JS/TS reuse candidates.
 - [x] Implement native-owned consumer descriptor and guarded request/reply bridge foundation.
 - [x] Add disposable browser subscriptions for bounded reply-associated events.
-- [ ] Complete build-time branding, stable-origin/custom serving and backend adapter configuration.
-- [ ] Prove unsolicited native event delivery and renderer lifecycle fencing.
+- [x] Complete build-time branding, stable-origin/custom serving and backend adapter configuration.
+- [x] Prove unsolicited native event delivery and renderer lifecycle fencing.
   Helper transport foundation is locally tested: one reader, correlated replies,
   authenticated event opt-in, 16-frame writer queue, slow-client disconnect and
   detached-event discard. Generic Kotlin stream demultiplexing now compiles and
-  has JVM coverage; renderer delivery and service integration remain pending.
-- [ ] Remote-only TE2 Termux POC, then owned local/external framework parity.
+  has JVM coverage; later embedded sample events and TE2 device acceptance close
+  the renderer-delivery/service integration gate.
+- [x] Remote-only TE2 Termux POC, then owned local/external framework parity.
 - [ ] Desktop feature matrix and both-device lifecycle acceptance.
-- [ ] Separately approved POC publication and reusable SDK extraction.
+- [x] Separately approved public source POC and TE2 Termux preview APK publication.
+- [ ] Reusable public SDK extraction/stabilization.
 
 - [x] Private independent repo and consumer-neutral layout.
 - [x] Framing and real Unix-socket/subprocess sample tests.
 - [x] Android/Cefrium build and bundled-page scaffold.
 - [ ] Select repository license before public distribution.
-- [ ] Add pinned Cefrium source submodule; prove SDK/plugin/resource combination.
-- [ ] Verify signed sample APK and installed shared UID on Motorola/Pixel.
-- [ ] Implement explicit Termux launch adapter and installer progress interface.
+- [x] Pin Cefrium SDK/plugin and prove resource combination; a Cefrium source submodule is not required by the implemented lane.
+- [x] Verify signed shared-UID samples: Pixel helper and Motorola Razr embedded execution proofs.
+- [x] Implement explicit Termux launch adapter and installer progress interface.
 - [x] Add native UID/signature/service inspection and diagnostic launch adapter.
 - [x] Compile Android sources and pass 3 launch-contract JVM tests plus 10 Python regressions.
 - [x] Verify correlated native diagnostic completion on Pixel (Motorola repeat pending).
 - [x] Wire Android filesystem socket client/native bridge to helper (Pixel accepted; Motorola repeat pending).
 - [x] Implement fixed trusted-page controls, bundled helper provisioning and bounded native/Python I/O.
-- [ ] Implement local-origin asset hosting; no server fetch dependency.
-- [ ] Bound socket/backend timeouts, queues and cancellation; concurrent clients.
-- [ ] Test activity/renderer recreation, lock/background and reconnect.
-- [ ] Test install/upgrade/failure rollback/uninstall preserving user state.
+- [x] Implement local-origin asset hosting; no server fetch dependency.
+- [x] Bound socket/backend timeouts, queues and owned-child cancellation with automated regressions.
+- [ ] Comprehensive physical concurrent-client stress acceptance.
+- [x] Test recorded Activity/service recreation, reopen, reconnect and density-change lifecycle cases.
+- [ ] Comprehensive lock/background destruction stress acceptance.
+- [x] TE2 consumer fresh install and storage-preserving APK upgrade acceptance.
+- [ ] Failure rollback and uninstall-preservation acceptance.
 - [x] Complete frontend-to-backend-to-frontend acceptance on Pixel; second-device repeat remains pending.
-- [ ] Add TE2 Termux consumer as a separate app; existing clients unchanged.
+- [x] Add TE2 Termux consumer as a separate app; existing clients unchanged.
 
-Checked items indicate scaffold/test scope only, not complete native acceptance.
-
-Next gate: [signed-device diagnostic procedure](DEVICE_LAUNCH_PROCEDURE.md).
-Reconnecting devices and explicit build/install approval are prerequisites.
+Checked items carry their stated scope: source tests, device evidence or user
+acceptance. They do not imply comprehensive compatibility. The original
+[signed-device diagnostic procedure](DEVICE_LAUNCH_PROCEDURE.md) gate is complete;
+remaining open gates concern broader acceptance and SDK/distribution work.
 
 ## Pixel diagnostic checkpoint (2026-10-06)
 
@@ -154,9 +194,9 @@ build; its acceptance must not be attributed to these new source changes.
 - [x] Idle-safe read, partial-frame/request deadlines, fail-closed disposal, no replay.
 - [x] Adapt HelperClient after authenticated hello; sample remains request-only.
 - [x] Seven JVM transport regressions plus existing sample tests; Kotlin compilation.
-- [ ] Renderer/page event subscription and lifecycle fences.
-- [ ] Generic consumer provisioning and TE2 persistent-service/relay integration.
-- [ ] New APK and physical acceptance (not approved in this source-only slice).
+- [x] Renderer/page event subscription and lifecycle fences.
+- [x] Generic consumer provisioning and TE2 persistent-service/relay integration.
+- [x] Subsequent separately approved embedded/TE2 APK builds and physical acceptance.
 
 No manifest, signing, Termux launch authority, device state or shared framework
 changes. Native configuration alone supplies event names/callbacks. Connection
@@ -172,8 +212,9 @@ sample has not been updated. This slice is uncommitted after checkpoint fdfb3f1.
 - [x] Independent sample.state helper frame; reply-associated sample.updated retained.
 - [x] 22 JVM tests (four renderer-lifetime regressions), 21 Python tests, browser
   wrong-document/malformed/disposal regressions and Android Kotlin compilation.
-- [ ] APK/physical verification of callback ordering, reload and unsolicited delivery.
-- [ ] Generic provisioning and persistent-service integration for TE2 consumer.
+- [x] Subsequent embedded unsolicited events and TE2 state delivery verified on device.
+- [ ] Comprehensive callback-order/reload stress acceptance.
+- [x] Generic provisioning and persistent-service integration for TE2 consumer.
 
 Source-only implementation; no APK/device/shared-framework changes. Existing
 installed sample and TE2 Termux clients remain unchanged. No Electron compatibility
@@ -190,8 +231,9 @@ Checkpoint `2644e07` records transport/renderer events locally (not pushed).
 - [x] Activity/page teardown detaches renderer only; service destruction closes transport,
   never implicitly stops the Termux helper/backend or retries a launch.
 - [x] 27 JVM tests, 22 Python tests, browser regressions and Kotlin compilation.
-- [ ] APK/device recreation, background destruction and reconnect acceptance.
-- [ ] TE2 consumer provisioning/service/relay integration and Desktop settings parity.
+- [x] Recorded embedded device recreation/reopen and reconnect acceptance.
+- [ ] Comprehensive background destruction/recovery acceptance.
+- [x] TE2 consumer provisioning/service/relay integration and Desktop settings parity.
 
 Source only; no APK, device, signing or shared framework mutation. No background
 survival guarantee. New sources remain uncommitted after the checkpoint.
@@ -214,7 +256,7 @@ survival guarantee. New sources remain uncommitted after the checkpoint.
 - [x] Revalidation: 26 host + 4 sample JVM tests, 23 Python tests and browser
   checks pass, together with host AAR assembly and sample Kotlin compilation.
 - [x] Checkpoint/push approved for the TE2 consumer dependency pin.
-- [ ] TE2 service/page/endpoint adapter integration, then APK/device lifecycle gates.
+- [x] TE2 service/page/endpoint adapter integration, then APK/device lifecycle gates.
 
 AGP 9 library generated assets use its variant source API rather than the
 application source-set DSL, which threw a library source-set cast failure. This
