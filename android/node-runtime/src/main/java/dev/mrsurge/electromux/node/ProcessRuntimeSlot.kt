@@ -5,6 +5,7 @@ package dev.mrsurge.electromux.node
  */
 class ProcessRuntimeSlot<T : Any> {
     private var outcome: Result<T>? = null
+    @Synchronized fun current(): T = checkNotNull(outcome) { "Runtime has not started" }.getOrThrow()
     @Synchronized fun acquire(factory: () -> T): T {
         val retained = outcome
         if (retained != null) return retained.getOrThrow()

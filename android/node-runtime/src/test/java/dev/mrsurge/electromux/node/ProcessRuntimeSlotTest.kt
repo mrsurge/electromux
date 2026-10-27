@@ -7,6 +7,13 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 class ProcessRuntimeSlotTest {
+    @Test fun acknowledgementLookupCannotInitializeOrPoisonAnUnstartedRuntime() {
+        val slot = ProcessRuntimeSlot<Any>()
+        try { slot.current(); fail("Unstarted slot must reject") } catch (_: IllegalStateException) { }
+        val engine = Any()
+        slot.acquire { engine }
+        assertSame(engine, slot.current())
+    }
     @Test fun recreatedConsumersRetainExactEngine() {
         val slot = ProcessRuntimeSlot<Any>()
         val engine = Any()

@@ -4,4 +4,5 @@ interface INodeHost {
     String request(String method, String parameters);
     void subscribe(INodeEvents observer);
     void unsubscribe(INodeEvents observer);
+    void acknowledgeEffect(int effectId, String error);
 }

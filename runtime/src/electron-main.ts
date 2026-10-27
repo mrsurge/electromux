@@ -1,5 +1,5 @@
 import {EventEmitter} from 'node:events';
-import {ElectronCompatibility, type NativeAdapter, type WindowOptions, type MenuTemplate} from './electron-compat.js';
+import {ElectronCompatibility, MainWindow, type NativeAdapter, type WindowOptions, type MenuTemplate} from './electron-compat.js';
 import {type CompatibilityManifest} from './electron-manifest.js';
 
 export type AppMetadata = {name: string; version: string; versions: Readonly<Record<string, string>>};
@@ -27,11 +27,10 @@ export function createElectronMain(manifest: CompatibilityManifest, adapter: Nat
       },
     },
   });
-  class BrowserWindow {
-    constructor(options?: WindowOptions) {
-      const window = owner.createWindow(options);
-      app.emit('browser-window-created', {}, window);
-      return window;
+  class BrowserWindow extends MainWindow {
+    constructor(options: WindowOptions = {}) {
+      super(owner, options);
+      app.emit('browser-window-created', {}, this);
     }
     static getFocusedWindow() { return owner.getFocusedWindow(); }
     static getAllWindows() { const window = owner.getFocusedWindow(); return window ? [window] : []; }

@@ -70,4 +70,10 @@ class EmbeddedNodeClient(context: Context, serviceClass: Class<out EmbeddedNodeS
         if (bound) { context.unbindService(connection); bound = false }
         ready.completeExceptionally(IllegalStateException("Node client detached"))
     }
+    /** Independent of request serialization: a request may be waiting for this ACK. */
+    fun acknowledgeEffect(effectId: Int, error: String? = null) {
+        check(Looper.myLooper() != Looper.getMainLooper()) { "Effect ACK must not block Android UI" }
+        check(!closed)
+        ready.get(8, TimeUnit.SECONDS).acknowledgeEffect(effectId, error)
+    }
 }

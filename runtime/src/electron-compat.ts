@@ -56,9 +56,11 @@ export class ElectronCompatibility {
   }
   async flush(): Promise<void> { await this.tail; if (this.failure) throw this.failure; }
   createWindow(options: WindowOptions = {}): MainWindow {
+    return new MainWindow(this, options);
+  }
+  registerWindow(window: MainWindow): void {
     if (this.window) throw new Error('Electromux main-only compatibility: additional BrowserWindow unsupported');
-    this.window = new MainWindow(this, options);
-    return this.window;
+    this.window = window;
   }
   getFocusedWindow(): MainWindow | undefined { return this.window?.isDestroyed() ? undefined : this.window; }
   setApplicationMenu(templates: readonly MenuTemplate[]): void {
@@ -111,6 +113,7 @@ export class MainWindow extends EventEmitter {
   readonly webContents: MainWebContents;
   constructor(private readonly owner: ElectronCompatibility, readonly options: WindowOptions) {
     super();
+    owner.registerWindow(this);
     this.webContents = new MainWebContents(owner, this);
     void owner.enqueue({kind: 'window.create', windowId: this.id, options}).catch(() => {});
   }

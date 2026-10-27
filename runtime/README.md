@@ -156,3 +156,24 @@ group cancellation all pass. Both shell and sleep descendant were absent afterwa
 This does not promise other Android/signing-family compatibility or a full
 Electron child_process API. The existing TermuxService adapter is not silently
 used as a fallback. Native input/output framing remains independent from TE2.
+# Persistent Electron effects
+
+`runElectronRuntime(factory, events)` composes the existing `ConsumerHost` with
+`ElectronChannel`. Consumers can use the Electron main facade without switching
+to the calculator's UI-bound service. State events share the bounded writer;
+native effect acknowledgments remain readable while a command awaits completion.
+Channel EOF disposes the consumer; renderer detachment alone must not close the
+process-owned channel. `runRuntime` and non-Electron consumer protocols are unchanged.
+
+An `EmbeddedNodeService` consumer opts in by declaring `electron.effect` in its
+event inventory. That consumer admits one native observer, not effect broadcasts
+to several potential owners. `EmbeddedNodeClient.acknowledgeEffect` uses the
+independent Binder/control lane, never the request executor awaiting the effect.
+Missing/stale owners acknowledge failure; do not replay mutations into a new
+renderer. Owner authorization and actual native rendering remain adapter policy.
+Unlike `EmbeddedElectronService`, observer detachment does not terminate the
+persistent runtime or its owned children. No second embedded Node engine is needed.
+Persistent mode also isolates valid negative ACKs and bounded effect timeouts
+from backend ownership. Timed-out IDs retain a bounded late-ACK fence; unknown or
+duplicate acknowledgments and transport/protocol failures still fail closed.
+The original calculator channel retains its existing failure/closure policy.

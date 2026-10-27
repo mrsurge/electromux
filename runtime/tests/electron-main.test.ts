@@ -30,6 +30,17 @@ test('calculator consumer manifest admits only the declared compatibility policy
   assert.equal(Object.keys(manifest.disabledMenuItems).length, 6);
   assert.ok(manifest.deferredFeatures.contextMenu);
 });
+test('public BrowserWindow retains typed window methods and rejects a second native creation', async () => {
+  const {host, effects} = setup();
+  const window = new host.electron.BrowserWindow();
+  assert.ok(window instanceof host.electron.BrowserWindow);
+  window.webContents.reload();
+  await window.loadURL('https://example.test/');
+  assert.throws(() => new host.electron.BrowserWindow(), /additional BrowserWindow/);
+  await host.owner.flush();
+  assert.deepEqual(effects.map(effect => effect.kind), ['window.create', 'webContents', 'window.load']);
+  assert.equal(host.electron.BrowserWindow.getFocusedWindow(), window);
+});
 test('readiness is explicit and container roles do not disable actionable children', async () => {
   const {host, effects} = setup(); let started = false;
   const pending = host.electron.app.whenReady().then(() => {

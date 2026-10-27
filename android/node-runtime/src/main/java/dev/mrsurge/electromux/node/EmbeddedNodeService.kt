@@ -66,13 +66,22 @@ abstract class EmbeddedNodeService : Service() {
         override fun subscribe(observer: INodeEvents) {
             authorize()
             synchronized(observers) {
-                check(observers.registeredCallbackCount < 16) { "Node observer limit reached" }
+                // Effects mutate one actual native owner. Never broadcast an ACK
+                // request to multiple owners; ordinary consumers retain fan-out.
+                val limit = if ("electron.effect" in consumer.events) 1 else 16
+                check(observers.registeredCallbackCount < limit) { "Node observer limit reached" }
                 check(observers.register(observer))
             }
         }
         override fun unsubscribe(observer: INodeEvents) {
             authorize()
             synchronized(observers) { observers.unregister(observer) }
+        }
+        override fun acknowledgeEffect(effectId: Int, error: String?) {
+            authorize()
+            check("electron.effect" in consumer.events)
+            // Do not acquire lane: its active request can be awaiting this ACK.
+            runtime.current().acknowledgeEffect(effectId, error)
         }
     }
     override fun onBind(intent: Intent): IBinder = binder
